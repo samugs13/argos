@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import csv
+import json
 import random
 from neo4j import GraphDatabase
 from neo4j.exceptions import Neo4jError
@@ -10,8 +11,6 @@ import sys
 # Códigos de color
 class color:
     PURPLE = "\033[95m"
-    CYAN = "\033[96m"
-    DARKCYAN = "\033[36m"
     BLUE = "\033[94m"
     GREEN = "\033[92m"
     YELLOW = "\033[93m"
@@ -50,7 +49,7 @@ def verify_probabilities(transitions, is_percentage=False):
         if is_percentage:
             total_prob /= 100  # Convertir a decimal
         if not (0.99 <= total_prob <= 1.01):  # Permitimos un pequeño margen de error
-            print(f"Error: La suma de probabilidades para el estado {state} es {total_prob:.2f}, y no es igual a 1.")
+            print(color.RED + "Error:" + color.END + f"La suma de probabilidades para el estado {state} es {total_prob:.2f}, y no es igual a 1.")
             exit(0)
         else:
             return
@@ -108,9 +107,6 @@ def generate_markov_sequence():
     # Cargar las transiciones desde el archivo CSV generado por el script anterior
     transitions = load_transitions('transitions.csv')
 
-    # Solicitar al usuario que ingrese el estado inicial
-    # start_state = input(f"Ingrese el estado inicial (debe ser uno de {list(transitions.keys())}): ")
-
     # Verificar que las probabilidades sumen correctamente
     verify_probabilities(transitions, is_percentage=True)  # Cambia a False si trabajas con decimales
 
@@ -137,10 +133,10 @@ def create_scenario_graph(driver, scenario_file):
                 
                 # Ejecutar el contenido en Neo4j
                 session.run(query)
-                print(f"Escenario desde '{scenario_file}' insertado en Neo4j.")
+                print(color.GREEN + f"Escenario desde '{scenario_file}' insertado en Neo4j." + color.END)
     
     except Neo4jError as e:
-        print(f"Error connecting to Neo4j: {e}")
+        print(color.RED + "Error connecting to Neo4j: " + color.END + f"{e}")
         exit(1)
 
 # Función para cargar el mapeo de técnicas a activos desde un archivo CSV
@@ -157,7 +153,24 @@ def load_techniques(csv_file):
             mapping[technique].append(asset)
     return mapping
 
-# Función para crear nodos y relaciones en Neo4j
+# Función para cargar el mapeo de técnicas a activos desde el archivo JSON
+def load_techniques_json(json_file):
+    mapping = {}
+    with open(json_file, 'r', encoding='utf-8') as file:
+        data = json.load(file)
+        for entry in data:
+            technique_id = entry["ID"]
+            mapping[technique_id] = {
+                "name": entry.get("name", "Desconocido"),
+                "tactic": entry.get("tactics", "Desconocido"),
+                "platforms": entry.get("platforms", "Desconocido"),
+                "defenses_bypassed": entry.get("defenses bypassed", "Desconocido"),
+                "permissions_required": entry.get("permissions required", "Desconocido"),
+                "system_requirements": entry.get("system requirements", "Desconocido"),
+                "effective_permissions": entry.get("effective permissions", "Desconocido")
+            }
+    return mapping
+
 def create_attack_graph(driver, chain, mapping):
     try:
         with driver.session() as session:
@@ -165,35 +178,112 @@ def create_attack_graph(driver, chain, mapping):
                 origin_state = chain[i]
                 destination_state = chain[i + 1]
 
-                # Obtener el activo afectado por cada técnica
-                origin_asset = mapping.get(origin_state, ["Desconocido"])[0]
-                destination_asset = mapping.get(destination_state, ["Desconocido"])[0]
+                # Obtener la información de la técnica para los atributos necesarios
+                origin_technique_info = mapping.get(origin_state, {})
+                dest_technique_info = mapping.get(destination_state, {})
+
+                # Convertir atributos a listas si no lo son
+                origin_platforms = origin_technique_info.get("platforms")
+                if isinstance(origin_platforms, str):
+                    origin_platforms = [origin_platforms]
+                elif origin_platforms is None:
+                    origin_platforms = []
                 
-                # Crear los nodos y la relación con atributos adicionales
+                origin_permissions = origin_technique_info.get("permissions_required")
+                if isinstance(origin_permissions, str):
+                    origin_permissions = [origin_permissions]
+                elif origin_permissions is None:
+                    origin_permissions = []
+                
+                origin_defenses_bypassed = origin_technique_info.get("defenses_bypassed")
+                if isinstance(origin_defenses_bypassed, str):
+                    origin_defenses_bypassed = [origin_defenses_bypassed]
+                elif origin_defenses_bypassed is None:
+                    origin_defenses_bypassed = []
+
+                # Repetir el mismo proceso para el destino
+                dest_platforms = dest_technique_info.get("platforms")
+                if isinstance(dest_platforms, str):
+                    dest_platforms = [dest_platforms]
+                elif dest_platforms is None:
+                    dest_platforms = []
+
+                dest_permissions = dest_technique_info.get("permissions_required")
+                if isinstance(dest_permissions, str):
+                    dest_permissions = [dest_permissions]
+                elif dest_permissions is None:
+                    dest_permissions = []
+
+                dest_defenses_bypassed = dest_technique_info.get("defenses_bypassed")
+                if isinstance(dest_defenses_bypassed, str):
+                    dest_defenses_bypassed = [dest_defenses_bypassed]
+                elif dest_defenses_bypassed is None:
+                    dest_defenses_bypassed = []
+
+                # Crear nodos de estado con atributos completos
                 session.run("""
-                    MERGE (a:Tecnica {nombre: $estado_origen, activo_afectado: $activo_origen})
-                    MERGE (b:Tecnica {nombre: $estado_destino, activo_afectado: $activo_destino})
+                    MERGE (a:Estado {
+                        nombre: $estado_origen,
+                        platforms: $platforms_origen,
+                        permissions_required: $permissions_origen,
+                        defenses_bypassed: $defenses_origen
+                    })
+                    MERGE (b:Estado {
+                        nombre: $estado_destino,
+                        platforms: $platforms_destino,
+                        permissions_required: $permissions_destino,
+                        defenses_bypassed: $defenses_destino
+                    })
                     MERGE (a)-[:TRANSICION_A]->(b)
-                """, estado_origen=origin_state, activo_origen=origin_asset, 
-                     estado_destino=destination_state, activo_destino=destination_asset)
+                """, 
+                estado_origen=origin_state, platforms_origen=origin_platforms,
+                permissions_origen=origin_permissions, defenses_origen=origin_defenses_bypassed,
+                estado_destino=destination_state, platforms_destino=dest_platforms,
+                permissions_destino=dest_permissions, defenses_destino=dest_defenses_bypassed)
+
+            print(color.GREEN + "Secuencia de ataque insertada en Neo4j." + color.END)
+
     except Neo4jError as e:
-        print(f"Error connecting to Neo4j: {e}")
+        print(color.RED + "Error connecting to Neo4j: " + color.END + f"{e}")
         exit(1)
 
-# Relacionar nodos de la secuencia de Markov con activos existentes en el escenario de red
 def link_attack_to_scenario(driver, chain, mapping):
     try:
         with driver.session() as session:
             for state in chain:
-                affected_asset = mapping.get(state, ["Desconocido"])[0]
-                # Relacionar estado con activo en el escenario de red
-                session.run("""
-                    MATCH (a:Tecnica {nombre: $estado}), (b:Activo {name: $activo_afectado})
-                    MERGE (a)-[:AFECTA_A]->(b)
-                """, estado=state, activo_afectado=affected_asset)
+                # Obtener la información de la técnica actual
+                technique_info = mapping.get(state, {})
+                
+                platforms = technique_info.get("platforms", [])
+                if isinstance(platforms, str):
+                    platforms = [platforms]
+                platforms = [platform.strip() for p in platforms for platform in p.split(",")]
 
+                permissions = technique_info.get("permissions_required", [])
+                if permissions is None:
+                    permissions = []
+                elif isinstance(permissions, str):
+                    permissions = [permissions]
+                permissions = [permission.strip() for p in permissions for permission in p.split(",")]
+                
+                defenses_bypassed = technique_info.get("defenses_bypassed", [])
+                if defenses_bypassed is None:
+                    defenses_bypassed = []
+                elif isinstance(defenses_bypassed, str):
+                    defenses_bypassed = [defenses_bypassed]
+                defenses_bypassed = [defense.strip() for d in defenses_bypassed for defense in d.split(",")]
+                
+                # Realizar el MATCH en Neo4j con los filtros de plataforma, permisos y defensas
+                session.run("""
+                    MATCH (a:Activo)
+                    WHERE a.platform IN $platforms
+                      AND ANY(permiso IN a.permissions_required WHERE permiso IN $permissions)
+                    MATCH (e:Estado {nombre: $estado})
+                    MERGE (e)-[:AFECTA_A]->(a)
+                """, platforms=platforms, defenses_bypassed=defenses_bypassed, permissions=permissions, estado=state)
+                
     except Neo4jError as e:
-        print(f"Error connecting to Neo4j: {e}")
+        print(color.RED + "Error connecting to Neo4j: " + color.END + f"{e}")
         exit(1)
 
 def clean_database(driver):
@@ -203,10 +293,10 @@ def clean_database(driver):
                 MATCH (n)
                 DETACH DELETE n
             """)
-            print("Database cleared")
+            print(color.GREEN + "Database cleared" + color.END)
 
     except Neo4jError as e:
-        print(f"Error connecting to Neo4j: {e}")
+        print(color.RED + "Error connecting to Neo4j: " + color.END + f"{e}")
         exit(1)
 
 # Función para conectar a la base de datos de Neo4j
@@ -256,6 +346,7 @@ def main():
 
     if str(sys.argv[1]) == "generate":
         generate_markov_sequence()
+        load_techniques_json('tecnicas_completo.json')
         exit(0)
     
     if str(sys.argv[1]) == "prepare":
@@ -272,9 +363,11 @@ def main():
 
     elif str(sys.argv[1]) == "attack":
         chain = generate_markov_sequence()    
-        mapping = load_techniques('tecnicas.csv')
+        #mapping = load_techniques_old('tecnicas.csv')
+        mapping = load_techniques_json('tecnicas_completo.json')
         driver = start_neo4j()
         create_attack_graph(driver, chain, mapping)
+        #link_attack_to_scenario_old(driver, chain, mapping)
         link_attack_to_scenario(driver, chain, mapping)
         
         close_neo4j(driver)
