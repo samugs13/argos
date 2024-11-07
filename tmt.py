@@ -7,17 +7,14 @@ from neo4j import GraphDatabase
 from neo4j.exceptions import Neo4jError
 from collections import deque
 import sys
-
-# Códigos de color
-class color:
-    PURPLE = "\033[95m"
-    BLUE = "\033[94m"
-    GREEN = "\033[92m"
-    YELLOW = "\033[93m"
-    RED = "\033[91m"
-    BOLD = "\033[1m"
-    UNDERLINE = "\033[4m"
-    END = "\033[0m"
+from rich.text import Text
+from rich.layout import Layout
+from rich.panel import Panel
+from rich.align import Align
+from rich.columns import Columns
+from rich.bar import Bar
+from rich.console import Console
+from rich import print as print
 
 # Definir los estados candidatos con sus probabilidades de ser absorbentes (finales)
 absorbent_probabilities = {
@@ -49,7 +46,7 @@ def verify_probabilities(transitions, is_percentage=False):
         if is_percentage:
             total_prob /= 100  # Convertir a decimal
         if not (0.99 <= total_prob <= 1.01):  # Permitimos un pequeño margen de error
-            print(color.RED + "Error:" + color.END + f"La suma de probabilidades para el estado {state} es {total_prob:.2f}, y no es igual a 1.")
+            print("\n[red][+][reset] Error:" + f"La suma de probabilidades para el estado {state} es {total_prob:.2f}, y no es igual a 1.")
             exit(0)
         else:
             return
@@ -82,12 +79,12 @@ def simulate_chain(start_state, num_steps, transitions, max_recent=5):
     for _ in range(num_steps):
         # Si alcanzamos un estado que, según su probabilidad, es absorbente, terminamos la secuencia
         if is_final_state(state):
-            print(f"Estado absorbente alcanzado: {state}. Fin de la secuencia.")
+            print(f"\n[yellow][+][reset] Estado absorbente alcanzado: {state}. Fin de la secuencia.\n")
             break
 
         # Detectar bucles recientes (si el estado ya está en los últimos visitados)
         if state in recently_visited:
-            print(f"Bucle detectado en el estado: {state}. Fin de la secuencia.")
+            print(f"[yellow][+][reset] Bucle detectado en el estado: {state}. Fin de la secuencia.\n")
             break
         
         recently_visited.append(state)  # Añadir estado a los recientes
@@ -120,7 +117,7 @@ def generate_markov_sequence():
         # Simulación de la cadena de Markov
         num_steps = 80  # Número de pasos a simular
         chain = simulate_chain(start_state, num_steps, transitions)
-        print("Secuencia simulada de estados:", chain)
+        print("[yellow][+][reset] Secuencia simulada de estados:", str(chain))
 
     return chain
 
@@ -133,10 +130,10 @@ def create_scenario_graph(driver, scenario_file):
                 
                 # Ejecutar el contenido en Neo4j
                 session.run(query)
-                print(color.GREEN + f"Escenario desde '{scenario_file}' insertado en Neo4j." + color.END)
+                print(f"\n[green][+][reset] Escenario desde '{scenario_file}' insertado en Neo4j.\n")
     
     except Neo4jError as e:
-        print(color.RED + "Error connecting to Neo4j: " + color.END + f"{e}")
+        print("\n[red][+][reset] Error connecting to Neo4j: " + f"{e}")
         exit(1)
 
 # Función para cargar el mapeo de técnicas a activos desde un archivo CSV
@@ -201,6 +198,8 @@ def create_attack_graph(driver, chain, mapping):
                 elif origin_defenses_bypassed is None:
                     origin_defenses_bypassed = []
 
+                origin_name = origin_technique_info.get("name")
+
                 # Repetir el mismo proceso para el destino
                 dest_platforms = dest_technique_info.get("platforms")
                 if isinstance(dest_platforms, str):
@@ -220,34 +219,44 @@ def create_attack_graph(driver, chain, mapping):
                 elif dest_defenses_bypassed is None:
                     dest_defenses_bypassed = []
 
+                dest_name = dest_technique_info.get("name")
+
                 # Crear nodos de estado con atributos completos
                 session.run("""
                     MERGE (a:Estado {
                         nombre: $estado_origen,
+                        technique: $name_origen,
                         platforms: $platforms_origen,
                         permissions_required: $permissions_origen,
                         defenses_bypassed: $defenses_origen
                     })
                     MERGE (b:Estado {
                         nombre: $estado_destino,
+                        technique: $name_destino,
                         platforms: $platforms_destino,
                         permissions_required: $permissions_destino,
                         defenses_bypassed: $defenses_destino
                     })
                     MERGE (a)-[:TRANSICION_A]->(b)
                 """, 
-                estado_origen=origin_state, platforms_origen=origin_platforms,
+                estado_origen=origin_state, name_origen=origin_name, platforms_origen=origin_platforms,
                 permissions_origen=origin_permissions, defenses_origen=origin_defenses_bypassed,
-                estado_destino=destination_state, platforms_destino=dest_platforms,
+                estado_destino=destination_state, name_destino=dest_name, platforms_destino=dest_platforms,
                 permissions_destino=dest_permissions, defenses_destino=dest_defenses_bypassed)
 
-            print(color.GREEN + "Secuencia de ataque insertada en Neo4j." + color.END)
+            print("\n[green][+][reset] Secuencia de ataque insertada en Neo4j.\n")
 
     except Neo4jError as e:
-        print(color.RED + "Error connecting to Neo4j: " + color.END + f"{e}")
+        print("\n[red][+][reset] Error connecting to Neo4j: " + f"{e}")
         exit(1)
 
 def link_attack_to_scenario(driver, chain, mapping):
+    
+    affected_assets = []
+    affecting_techniques_ids = []
+    affecting_techniques_names = []
+    total_assets = []
+
     try:
         with driver.session() as session:
             for state in chain:
@@ -274,18 +283,164 @@ def link_attack_to_scenario(driver, chain, mapping):
                 defenses_bypassed = [defense.strip() for d in defenses_bypassed for defense in d.split(",")]
                 
                 # Realizar el MATCH en Neo4j con los filtros de plataforma, permisos y defensas
-                session.run("""
+                result = session.run("""
                     MATCH (a:Activo)
                     WHERE a.platform IN $platforms
                       AND ANY(permiso IN a.permissions_required WHERE permiso IN $permissions)
                     MATCH (e:Estado {nombre: $estado})
+                    MATCH (n:Activo) 
                     MERGE (e)-[:AFECTA_A]->(a)
+                    RETURN a.name, e.nombre, e.technique, count(n) AS total_activos
                 """, platforms=platforms, defenses_bypassed=defenses_bypassed, permissions=permissions, estado=state)
                 
+                # Iterar sobre los registros en el resultado
+                for record in result:
+                    asset = record["a.name"]
+                    technique_id = record["e.nombre"]
+                    technique_name = record["e.technique"]
+                    total_assets = record["total_activos"]
+                    affected_assets.append(asset)
+                    affecting_techniques_ids.append(technique_id)
+                    affecting_techniques_names.append(technique_name)
+
+        create_dashboard(affected_assets, affecting_techniques_ids, affecting_techniques_names, total_assets)
+
     except Neo4jError as e:
-        print(color.RED + "Error connecting to Neo4j: " + color.END + f"{e}")
+        print("\n[red][+][reset] Error connecting to Neo4j: " + f"{e}")
         exit(1)
 
+def create_dashboard(affected_assets, affecting_techniques_ids, affecting_techniques_names, total_assets):
+    if len(affected_assets) != len(affecting_techniques_ids):
+        print("\n[red][+][reset] Error: Las listas deben tener la misma longitud.")
+        return
+
+    try:  
+        secure_assets = int(total_assets) - int(len(set(affected_assets)))
+        affected_assets_count = len(set(affected_assets))
+        successful_techniques_count = len(set(affecting_techniques_ids))
+        attack_severity = min(100, int((affected_assets_count / total_assets * 50) + (successful_techniques_count / len(affecting_techniques_ids) * 50)))
+
+    except:
+        print("\n[red][+][reset] No se han encontrado activos. Recuerda cargar primero el escenario.\n")
+        exit(0)
+
+    # Crear el contenido dinámico para el panel "Overview"
+    overview_content = "\n"
+    for asset, technique_id, technique_name in zip(affected_assets, affecting_techniques_ids, affecting_techniques_names):
+        # Generar la cadena de texto con formato
+        overview_content += f"· Activo[bold][cyan] {asset}[reset]\tcomprometido por [bold][cyan]{technique_id} - {technique_name}[reset]\n"
+
+    # Crear un Panel con el contenido generado
+    overview_panel = Panel(overview_content, title="[blue]RESUMEN")
+    
+    activos_panel = Panel(
+        f"\nActivos afectados {affected_assets_count}\n"
+        f"Activos seguros: {secure_assets}\n"
+        f"Total de activos: {total_assets}\n",
+        title="[green]:laptop_computer: ACTIVOS"
+    )
+
+    tecnicas_panel = Panel(
+        f"\nTécnicas exitosas: {successful_techniques_count}\n"
+        f"Técnicas intentadas: {len(affecting_techniques_ids)}\n",
+        title="[red]:old_key: TÉCNICAS"
+    )
+
+    # Selección de color de barra en función de la gravedad
+    if attack_severity <= 33:
+        bar_color = "green"
+    elif attack_severity <= 66:
+        bar_color = "yellow"
+    else:
+        bar_color = "red"
+
+    layout = Layout()
+
+    # Divide the "screen" in to three parts
+    layout.split(
+        Layout("[yellow][+][reset] DASHBOARD"),
+        Layout(name="main"),
+    )
+    # Divide the "main" layout in to "side" and "body"
+    layout["main"].split_row(
+        Layout(name="Statistics"),
+        Layout(overview_panel, ratio=4)
+    )
+    # Divide the "side" layout in to two
+    layout["Statistics"].split_column(Layout(activos_panel), Layout(tecnicas_panel))
+
+    print(layout)
+    
+    # Crear y mostrar la barra de gravedad del ataque con color condicional y centrada
+    bar = Bar(size=100, begin=0, end=attack_severity, color=bar_color, bgcolor="black", width=40)
+    criticity_text = Text("CRITICIDAD DEL ATAQUE\n", style="r")
+    percentage_text = Text(f"{attack_severity}%", style=bar_color)
+    print("\n\n")
+    print(Align.center(criticity_text))  # Porcentaje centrado junto a la barra
+    print(Align.center(bar))
+    print("\n")# Barra centrada
+    print(Align.center(percentage_text))  # Porcentaje centrado junto a la barra
+    
+def create_dashboard2(affected_assets, affecting_techniques_ids, affecting_techniques_names, total_assets):
+    # Verificar que ambas listas tienen la misma longitud
+    if len(affected_assets) != len(affecting_techniques_ids):
+        print("\n[red][+][reset] Error: Las listas deben tener la misma longitud.")
+        return
+    
+    # Mostrar detalles de cada activo afectado
+    for asset, technique_id, technique_name in zip(affected_assets, affecting_techniques_ids, affecting_techniques_names):
+        print(f"· Activo [yellow]{asset} [reset]afectado por técnica: [red]{technique_id} - {technique_name}\n")
+
+    try:  
+        # Calcula la cantidad de activos seguros y afectados
+        secure_assets = int(total_assets) - int(len(set(affected_assets)))
+        affected_assets_count = len(set(affected_assets))
+        successful_techniques_count = len(set(affecting_techniques_ids))
+
+        # Calcula la gravedad del ataque como un porcentaje (basado en la proporción de activos afectados y técnicas exitosas)
+        attack_severity = min(100, int((affected_assets_count / total_assets * 50) + (successful_techniques_count / len(affecting_techniques_ids) * 50)))
+
+    except:
+        print("\n[red][+][reset] No se han encontrado activos afectados.\n")
+        exit(0)
+
+    # Información en dos columnas
+    activos_panel = Panel(
+        f"\n[green]:laptop_computer: Activos afectados:[reset] {affected_assets_count}\n"
+        f"[green]:white_check_mark: Activos seguros:[reset] {secure_assets}\n"
+        f"[green]:hourglass: Total de activos:[reset] {total_assets}\n",
+        title="[blue]ESTADÍSTICAS DE ACTIVOS"
+    )
+
+    tecnicas_panel = Panel(
+        f"\n[red]:old_key: Técnicas exitosas:[reset] {successful_techniques_count}\n"
+        f"[red]:shield: Técnicas intentadas:[reset] {len(affecting_techniques_ids)}\n",
+        title="[blue]ESTADÍSTICAS DE TÉCNICAS"
+    )
+
+    # Mostrar paneles en dos columnas
+    dashboard = Columns([activos_panel, tecnicas_panel])
+    dashboard_centered = Align.center(dashboard, vertical="middle")
+    print("\n\n")
+    print(dashboard_centered)
+    print("\n\n")
+   
+   # Selección de color de barra en función de la gravedad
+    if attack_severity <= 33:
+        bar_color = "green"
+    elif attack_severity <= 66:
+        bar_color = "yellow"
+    else:
+        bar_color = "red"
+
+    # Crear y mostrar la barra de gravedad del ataque con color condicional y centrada
+    bar = Bar(size=100, begin=0, end=attack_severity, color=bar_color, bgcolor="black", width=40)
+    percentage_text = Text(f"{attack_severity}%", style=bar_color)
+
+    print(Align.center(bar))
+    print("\n")# Barra centrada
+    print(Align.center(percentage_text))  # Porcentaje centrado junto a la barra     
+        
 def clean_database(driver):
     try:
         with driver.session() as session:
@@ -293,10 +448,10 @@ def clean_database(driver):
                 MATCH (n)
                 DETACH DELETE n
             """)
-            print(color.GREEN + "Database cleared" + color.END)
+            print("\n[green][+][reset] Database cleared\n")
 
     except Neo4jError as e:
-        print(color.RED + "Error connecting to Neo4j: " + color.END + f"{e}")
+        print("\n[red][+][reset] Error connecting to Neo4j: " + f"[reset]{e}")
         exit(1)
 
 # Función para conectar a la base de datos de Neo4j
@@ -306,7 +461,7 @@ def connect_neo4j(uri, user, password):
         return driver
 
     except Neo4jError as e:
-        print(f"Error connecting to Neo4j: {e}")
+        print(f"\n[red][+][reset] Error connecting to Neo4j: {e}")
         exit(1)
 
 def start_neo4j():
@@ -322,21 +477,21 @@ def close_neo4j(driver):
     driver.close()
 
 def help():
-    print("TMT - Threat Modeling Tool")
-    print(color.BLUE + "Autor:" + color.END + "\tSamuel García Sánchez")
-    print(color.BLUE + "\nUSO:" + color.END)
-    print("\tpython3 tmt [generate|prepare <FILE>|attack|clean] [--help|-h]\n")
-    print(color.BLUE + "COMMANDS:" + color.END)
-    print(color.YELLOW + "\tgenerate:" + color.END + "\tGenerar y mostrar secuencia de ataque.")
-    print(color.YELLOW + "\tprepare:" + color.END + "\tCargar escenario de red enviado como parámetro en Neo4j.")
-    print(color.YELLOW + "\tattack:" + color.END + "\t\tGenerar ataque y dirigirlo al escenario creado.")
-    print(color.YELLOW + "\tclean:" + color.END + "\t\tLimpiar base de datos.\n")
+    print("[reset]TMT - Threat Modeling Tool")
+    print("[blue]Autor:" + "[reset]\tSamuel García Sánchez")
+    print("[blue]\nUSO:")
+    print("[reset]\tpython3 tmt [generate|prepare <FILE>|attack|clean] [--help|-h]\n")
+    print("[blue]COMMANDS:")
+    print("[yellow]\tgenerate:" + "[reset]\tGenerar y mostrar secuencia de ataque.")
+    print("[yellow]\tprepare:" + "[reset]\tCargar escenario de red enviado como parámetro en Neo4j.")
+    print("[yellow]\tattack:" + "[reset]\t\tGenerar ataque y dirigirlo al escenario creado.")
+    print("[yellow]\tclean:" + "[reset]\t\tLimpiar base de datos.\n")
  
 def main():
     
     # Verificar argumentos
     if len(sys.argv) <= 1:
-        print("You didn't specify an argument.")
+        print("[reset]You didn't specify an argument.")
         help()
         exit(1)
 
@@ -352,7 +507,7 @@ def main():
     if str(sys.argv[1]) == "prepare":
         
         if len(sys.argv) < 3:
-            print("Please specify the scenario file.")
+            print("[reset]Please specify the scenario file.")
             exit(1)
         
         scenario_file = sys.argv[2]
@@ -380,7 +535,7 @@ def main():
         exit(0)
 
     else:
-        print("No valid arguments were introduced")
+        print("[reset]No valid arguments were introduced")
         help()
         exit(0)
 
