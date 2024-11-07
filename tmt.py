@@ -381,66 +381,6 @@ def create_dashboard(affected_assets, affecting_techniques_ids, affecting_techni
     print("\n")# Barra centrada
     print(Align.center(percentage_text))  # Porcentaje centrado junto a la barra
     
-def create_dashboard2(affected_assets, affecting_techniques_ids, affecting_techniques_names, total_assets):
-    # Verificar que ambas listas tienen la misma longitud
-    if len(affected_assets) != len(affecting_techniques_ids):
-        print("\n[red][+][reset] Error: Las listas deben tener la misma longitud.")
-        return
-    
-    # Mostrar detalles de cada activo afectado
-    for asset, technique_id, technique_name in zip(affected_assets, affecting_techniques_ids, affecting_techniques_names):
-        print(f"· Activo [yellow]{asset} [reset]afectado por técnica: [red]{technique_id} - {technique_name}\n")
-
-    try:  
-        # Calcula la cantidad de activos seguros y afectados
-        secure_assets = int(total_assets) - int(len(set(affected_assets)))
-        affected_assets_count = len(set(affected_assets))
-        successful_techniques_count = len(set(affecting_techniques_ids))
-
-        # Calcula la gravedad del ataque como un porcentaje (basado en la proporción de activos afectados y técnicas exitosas)
-        attack_severity = min(100, int((affected_assets_count / total_assets * 50) + (successful_techniques_count / len(affecting_techniques_ids) * 50)))
-
-    except:
-        print("\n[red][+][reset] No se han encontrado activos afectados.\n")
-        exit(0)
-
-    # Información en dos columnas
-    activos_panel = Panel(
-        f"\n[green]:laptop_computer: Activos afectados:[reset] {affected_assets_count}\n"
-        f"[green]:white_check_mark: Activos seguros:[reset] {secure_assets}\n"
-        f"[green]:hourglass: Total de activos:[reset] {total_assets}\n",
-        title="[blue]ESTADÍSTICAS DE ACTIVOS"
-    )
-
-    tecnicas_panel = Panel(
-        f"\n[red]:old_key: Técnicas exitosas:[reset] {successful_techniques_count}\n"
-        f"[red]:shield: Técnicas intentadas:[reset] {len(affecting_techniques_ids)}\n",
-        title="[blue]ESTADÍSTICAS DE TÉCNICAS"
-    )
-
-    # Mostrar paneles en dos columnas
-    dashboard = Columns([activos_panel, tecnicas_panel])
-    dashboard_centered = Align.center(dashboard, vertical="middle")
-    print("\n\n")
-    print(dashboard_centered)
-    print("\n\n")
-   
-   # Selección de color de barra en función de la gravedad
-    if attack_severity <= 33:
-        bar_color = "green"
-    elif attack_severity <= 66:
-        bar_color = "yellow"
-    else:
-        bar_color = "red"
-
-    # Crear y mostrar la barra de gravedad del ataque con color condicional y centrada
-    bar = Bar(size=100, begin=0, end=attack_severity, color=bar_color, bgcolor="black", width=40)
-    percentage_text = Text(f"{attack_severity}%", style=bar_color)
-
-    print(Align.center(bar))
-    print("\n")# Barra centrada
-    print(Align.center(percentage_text))  # Porcentaje centrado junto a la barra     
-        
 def clean_database(driver):
     try:
         with driver.session() as session:
