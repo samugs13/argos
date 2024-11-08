@@ -11,10 +11,10 @@ from rich.text import Text
 from rich.layout import Layout
 from rich.panel import Panel
 from rich.align import Align
-from rich.columns import Columns
 from rich.bar import Bar
-from rich.console import Console
+from rich.console import Console, Group
 from rich import print as print
+from collections import Counter
 
 # Definir los estados candidatos con sus probabilidades de ser absorbentes (finales)
 absorbent_probabilities = {
@@ -118,7 +118,7 @@ def generate_markov_sequence():
         num_steps = 80  # Número de pasos a simular
         chain = simulate_chain(start_state, num_steps, transitions)
         print("[yellow][+][reset] Secuencia simulada de estados:", str(chain))
-
+        print("\n")
     return chain
 
 def create_scenario_graph(driver, scenario_file):
@@ -244,7 +244,7 @@ def create_attack_graph(driver, chain, mapping):
                 estado_destino=destination_state, name_destino=dest_name, platforms_destino=dest_platforms,
                 permissions_destino=dest_permissions, defenses_destino=dest_defenses_bypassed)
 
-            print("\n[green][+][reset] Secuencia de ataque insertada en Neo4j.\n")
+            print("[green][+][reset] Secuencia de ataque insertada en Neo4j.\n")
 
     except Neo4jError as e:
         print("\n[red][+][reset] Error connecting to Neo4j: " + f"{e}")
@@ -303,13 +303,13 @@ def link_attack_to_scenario(driver, chain, mapping):
                     affecting_techniques_ids.append(technique_id)
                     affecting_techniques_names.append(technique_name)
 
-        create_dashboard(affected_assets, affecting_techniques_ids, affecting_techniques_names, total_assets)
+        create_dashboard(affected_assets, affecting_techniques_ids, affecting_techniques_names, total_assets, chain)
 
     except Neo4jError as e:
         print("\n[red][+][reset] Error connecting to Neo4j: " + f"{e}")
         exit(1)
 
-def create_dashboard(affected_assets, affecting_techniques_ids, affecting_techniques_names, total_assets):
+def create_dashboard(affected_assets, affecting_techniques_ids, affecting_techniques_names, total_assets, chain):
     if len(affected_assets) != len(affecting_techniques_ids):
         print("\n[red][+][reset] Error: Las listas deben tener la misma longitud.")
         return
@@ -323,64 +323,114 @@ def create_dashboard(affected_assets, affecting_techniques_ids, affecting_techni
     except:
         print("\n[red][+][reset] No se han encontrado activos. Recuerda cargar primero el escenario.\n")
         exit(0)
+    
+    secuencia_content = "\n"
+    for state in chain:
+        # Generar la cadena de texto con formato
+        secuencia_content += f"[b]{state}[reset] -> "
+        
+    secuencia_content = secuencia_content[:-4] # Eliminar flecha del último estado
+    secuencia_panel = Panel(secuencia_content, title="[b magenta]:link: ATAQUE", padding=(0, 1), border_style="magenta")  
 
     # Crear el contenido dinámico para el panel "Overview"
-    overview_content = "\n"
+    defense_content = "\n"
     for asset, technique_id, technique_name in zip(affected_assets, affecting_techniques_ids, affecting_techniques_names):
         # Generar la cadena de texto con formato
-        overview_content += f"· Activo[bold][cyan] {asset}[reset]\tcomprometido por [bold][cyan]{technique_id} - {technique_name}[reset]\n"
+        defense_content += f"[b]·[reset] Activo [u]{asset}[reset]\tcomprometido por [u]{technique_id} - {technique_name}[reset]\n"
 
     # Crear un Panel con el contenido generado
-    overview_panel = Panel(overview_content, title="[blue]RESUMEN")
-    
+    defense_panel = Panel(defense_content, title="[b blue]:shield: DEFENSA", padding=(0, 1), border_style="blue")
+   
+    # Calcular activos más afectados   
+    counter = Counter(affected_assets)
+    max_freq = max(counter.values())
+    most_affected_assets = [activo for activo, frecuencia in counter.items() if frecuencia == max_freq]
+    maa_str = ", ".join(most_affected_assets)
+
+    # Calcular técnicas más exitosas   
+    counter = Counter(affecting_techniques_ids)
+    max_freq = max(counter.values())
+    most_affecting_techniques = [tech for tech, frecuencia in counter.items() if frecuencia == max_freq]
+    mat_str = ", ".join(most_affecting_techniques)
+
+
     activos_panel = Panel(
-        f"\nActivos afectados {affected_assets_count}\n"
-        f"Activos seguros: {secure_assets}\n"
-        f"Total de activos: {total_assets}\n",
-        title="[green]:laptop_computer: ACTIVOS"
+        f"\n[b]Total de activos:[reset]\t{total_assets}\n"
+        f"\n[b]Activos afectados:[reset]\t{affected_assets_count}\n"
+        f"\n[b]Activos seguros:[reset]\t{secure_assets}\n"
+        f"\n[b]Activo(s) más afectado(s):[reset] {maa_str} ({max_freq} veces)\n",
+        title="[b green]:laptop_computer: ACTIVOS",
+        padding=(0, 1),
+        border_style="green"
     )
 
     tecnicas_panel = Panel(
-        f"\nTécnicas exitosas: {successful_techniques_count}\n"
-        f"Técnicas intentadas: {len(affecting_techniques_ids)}\n",
-        title="[red]:old_key: TÉCNICAS"
+        f"\n[b]Técnicas en la secuencia:[reset]\t{len(chain)}\n"
+        f"\n[b]Técnicas distintas empleadas:[reset]\t{len(set(chain))}\n"
+        f"\n[b]Total técnicas exitosas:[reset]\t{successful_techniques_count}\n"
+        f"\n[b]Técnica más exitosa:[reset] {mat_str} ({max_freq} veces)\n",
+        title="[b red]:old_key: TÉCNICAS",
+        padding=(0, 1),
+        border_style="red"
     )
 
     # Selección de color de barra en función de la gravedad
     if attack_severity <= 33:
         bar_color = "green"
+        criticity = "Baja"
     elif attack_severity <= 66:
         bar_color = "yellow"
+        criticity = "Media"
     else:
         bar_color = "red"
+        criticity = "Alta"
 
-    layout = Layout()
-
-    # Divide the "screen" in to three parts
-    layout.split(
-        Layout("[yellow][+][reset] DASHBOARD"),
-        Layout(name="main"),
-    )
-    # Divide the "main" layout in to "side" and "body"
-    layout["main"].split_row(
-        Layout(name="Statistics"),
-        Layout(overview_panel, ratio=4)
-    )
-    # Divide the "side" layout in to two
-    layout["Statistics"].split_column(Layout(activos_panel), Layout(tecnicas_panel))
-
-    print(layout)
-    
     # Crear y mostrar la barra de gravedad del ataque con color condicional y centrada
     bar = Bar(size=100, begin=0, end=attack_severity, color=bar_color, bgcolor="black", width=40)
-    criticity_text = Text("CRITICIDAD DEL ATAQUE\n", style="r")
-    percentage_text = Text(f"{attack_severity}%", style=bar_color)
-    print("\n\n")
-    print(Align.center(criticity_text))  # Porcentaje centrado junto a la barra
-    print(Align.center(bar))
-    print("\n")# Barra centrada
-    print(Align.center(percentage_text))  # Porcentaje centrado junto a la barra
+    criticity_text = Text(f"{attack_severity} - {criticity}")
+
+
+    bar_panel = Panel(
+        Align.center(
+            Group(Align.center(criticity_text), "", Align.center(bar)),
+            vertical="middle",
+        ),
+        padding=(1, 2),
+        title="[b yellow]:warning: CRITICIDAD",
+        border_style="yellow"
+    )
+
+    # Crear el layout
+    layout = Layout()
+
+    # Divide la pantalla en dos partes, con "secuencia_panel" en la parte superior y "main" en la parte inferior
+    layout.split(
+        Layout(secuencia_panel, size=5),  # Ajusta el tamaño para reducir el espacio
+        Layout(name="main", ratio=1),    # Usa el resto del espacio para "main"
+    )
+
+    layout["main"].split_row(
+        Layout(name="Statistics", ratio=1), 
+        Layout(name="Defense", ratio=2)
+    )
     
+    # Divide el layout "Statistics" en dos partes verticales: "activos_panel" y "tecnicas_panel"
+    layout["Defense"].split_column(
+        Layout(defense_panel, ratio=3),
+        Layout(bar_panel, ratio=1)
+    )
+
+    # Divide el layout "Statistics" en dos partes verticales: "activos_panel" y "tecnicas_panel"
+    layout["Statistics"].split_column(
+        Layout(activos_panel, ratio=1),
+        Layout(tecnicas_panel, ratio=1)
+    )
+
+    from rich.live import Live
+    # Mantener el layout visible usando Live
+    with Live(layout, screen=True):
+        input("Presiona Enter para salir...")  # Pausar hasta que presiones Enter
+
 def clean_database(driver):
     try:
         with driver.session() as session:
