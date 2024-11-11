@@ -3,16 +3,20 @@
 import csv
 import json
 import random
+import os
+import datetime
 from neo4j import GraphDatabase
 from neo4j.exceptions import Neo4jError
 from collections import deque
 import sys
+import pandas as pd
 from rich.text import Text
 from rich.layout import Layout
 from rich.panel import Panel
 from rich.align import Align
 from rich.bar import Bar
 from rich.console import Console, Group
+from rich.table import Table
 from rich import print as print
 from collections import Counter
 
@@ -23,6 +27,8 @@ absorbent_probabilities = {
     'T1078': 0.405,
     'T1102': 0.59
 }
+
+current_scenario=""
 
 # Función para cargar las transiciones desde el archivo CSV
 def load_transitions(csv_file):
@@ -122,6 +128,9 @@ def generate_markov_sequence():
     return chain
 
 def create_scenario_graph(driver, scenario_file):
+    global current_scenario
+    current_scenario=os.path.basename(scenario_file)
+    guardar_escenario(current_scenario)
     try:
         with driver.session() as session:
             with open(scenario_file, 'r', encoding='utf-8') as file:
@@ -130,7 +139,7 @@ def create_scenario_graph(driver, scenario_file):
                 
                 # Ejecutar el contenido en Neo4j
                 session.run(query)
-                print(f"\n[green][+][reset] Escenario desde '{scenario_file}' insertado en Neo4j.\n")
+                print(f"\n[green][+][reset] Escenario desde '{current_scenario}' insertado en Neo4j.\n")
     
     except Neo4jError as e:
         print("\n[red][+][reset] Error connecting to Neo4j: " + f"{e}")
@@ -302,7 +311,8 @@ def link_attack_to_scenario(driver, chain, mapping):
                     affected_assets.append(asset)
                     affecting_techniques_ids.append(technique_id)
                     affecting_techniques_names.append(technique_name)
-
+    
+        #Crear dashboard del ataque
         create_dashboard(affected_assets, affecting_techniques_ids, affecting_techniques_names, total_assets, chain)
 
     except Neo4jError as e:
@@ -426,10 +436,51 @@ def create_dashboard(affected_assets, affecting_techniques_ids, affecting_techni
         Layout(tecnicas_panel, ratio=1)
     )
 
+    # Generar un ID único para el ataque y almacenarlo en el histórico
+    attack_id = f"Ataque-{random.randint(1000, 9999)}"
+    scenario=cargar_escenario()
+    save_attack_stats_csv(attack_id, scenario, maa_str, mat_str)
+
+
     from rich.live import Live
     # Mantener el layout visible usando Live
     with Live(layout, screen=True):
-        input("Presiona Enter para salir...")  # Pausar hasta que presiones Enter
+        input("Presiona Enter para salir...")
+
+def save_attack_stats_csv(attack_id, scenario, most_affected_asset, most_recurrent_asset):
+    # Verifica si el archivo ya existe para añadir encabezados solo en caso necesario
+    file_exists = os.path.isfile('historial_ataques.csv')
+
+    with open('historial_ataques.csv', mode='a', newline='', encoding='utf-8') as file:
+        writer = csv.writer(file)
+        if not file_exists:
+            # Escribe los encabezados si el archivo se está creando
+            writer.writerow(["ID Ataque", "Escenario", "Activo Más Afectado", "Técnica más exitosa", "Fecha de ejecución"])
+
+        # Registra los datos del ataque
+        writer.writerow([attack_id, scenario, most_affected_asset, most_recurrent_asset, str(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))])
+    
+    print(f"[green][+][reset] Estadísticas del ataque {attack_id} guardadas en historial_ataques.csv.\n")
+
+def display_attack_history_csv():
+    try:
+        df = pd.read_csv('historial_ataques.csv', skipinitialspace = True,quotechar='"')
+
+        table = Table(title="Historial de ataques")
+        rows = df.values.tolist()
+        rows = [[str(el) for el in row] for row in rows]
+        columns = df.columns.tolist()
+
+        for column in columns:
+            table.add_column(column)
+
+        for row in rows:
+            table.add_row(*row, style='cyan')
+
+        print(Align.center(table))
+
+    except FileNotFoundError:
+        print("\n[red][+][reset] No se ha encontrado el archivo historial_ataques.csv. Ejecuta al menos un ataque para generar el historial.\n")
 
 def clean_database(driver):
     try:
@@ -443,6 +494,17 @@ def clean_database(driver):
     except Neo4jError as e:
         print("\n[red][+][reset] Error connecting to Neo4j: " + f"[reset]{e}")
         exit(1)
+
+def guardar_escenario(escenario):
+    with open('current_scenario.txt', "w") as file:
+        file.write(str(escenario))
+
+def cargar_escenario():
+    try:
+        with open('current_scenario.txt', "r") as file:
+            return file.read()
+    except FileNotFoundError:
+        return 0
 
 # Función para conectar a la base de datos de Neo4j
 def connect_neo4j(uri, user, password):
@@ -508,11 +570,9 @@ def main():
 
     elif str(sys.argv[1]) == "attack":
         chain = generate_markov_sequence()    
-        #mapping = load_techniques_old('tecnicas.csv')
         mapping = load_techniques_json('tecnicas_completo.json')
         driver = start_neo4j()
         create_attack_graph(driver, chain, mapping)
-        #link_attack_to_scenario_old(driver, chain, mapping)
         link_attack_to_scenario(driver, chain, mapping)
         
         close_neo4j(driver)
@@ -522,6 +582,10 @@ def main():
         driver = start_neo4j()
         clean_database(driver)
         close_neo4j(driver)
+        exit(0)
+    
+    elif str(sys.argv[1]) == "history":
+        display_attack_history_csv()
         exit(0)
 
     else:
