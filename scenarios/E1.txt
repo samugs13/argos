@@ -1,0 +1,51 @@
+// Creación de nodos de activos y sus propiedades adicionales
+CREATE 
+    (u1:Activo:Usuario {name: 'Empleado1', sistema: 'Windows 10', ip: '192.168.1.10', 
+        platform: 'Windows', defenses_bypassed: ['Anti-virus', 'Application control'], 
+        permissions_required: 'User', system_requirements: ['Servicio remoto activo que acepte conexiones y credenciales válidas']}),
+
+    (u2:Activo:Usuario {name: 'Empleado2', sistema: 'Windows 10', ip: '192.168.1.11', 
+        platform: 'Windows', defenses_bypassed: ['Anti-virus', 'Application control'], 
+        permissions_required: 'User', system_requirements: ['Servicio remoto activo que acepte conexiones y credenciales válidas']}),
+
+    (u3:Activo:Usuario {name: 'Empleado3', sistema: 'macOS', ip: '192.168.1.12', 
+        platform: 'macOS', defenses_bypassed: ['Application control'], 
+        permissions_required: 'User', system_requirements: ['Servicio remoto activo que acepte conexiones y credenciales válidas']}),
+
+    (s1:Activo:Servidor {name: 'ServidorWeb', sistema: 'Ubuntu 20.04', ip: '192.168.1.20', 
+        servicios: ['HTTP', 'HTTPS'], vulnerabilidades: ['CVE-2021-34527'], platform: 'Linux', 
+        defenses_bypassed: ['Firewall', 'Digital Certificate Validation'], 
+        permissions_required: 'root', system_requirements: ['Privilegios para acceder a ciertos archivos y directorios']}),
+
+    (s2:Activo:Servidor {name: 'ServidorBD', sistema: 'CentOS 7', ip: '192.168.1.21', 
+        servicios: ['MySQL'], vulnerabilidades: ['CVE-2020-14882'], platform: 'Linux', 
+        defenses_bypassed: ['Firewall', 'Digital Certificate Validation'], 
+        permissions_required: 'root', system_requirements: ['Privilegios para acceder a ciertos archivos y directorios']}),
+
+    (fw:Activo:DispositivoRed {name: 'Firewall', tipo: 'Firewall', ip: '192.168.1.1', 
+        reglas: ['Permitir: HTTP', 'Bloquear: ICMP'], platform: 'Network', 
+        defenses_bypassed: [], permissions_required: 'Administrator', 
+        system_requirements: ['Presencia de dispositivo físico o medio de almacenamiento']}),
+
+    (app1:Activo:Aplicacion {name: 'Apache', version: '2.4.49', vulnerabilidades: ['CVE-2021-41773'], 
+        platform: 'Linux', defenses_bypassed: ['File monitoring'], 
+        permissions_required: 'root', system_requirements: ['Privilegios para acceder a ciertos archivos y directorios']}),
+
+    (app2:Activo:Aplicacion {name: 'MySQL', version: '5.7', vulnerabilidades: [], 
+        platform: 'Linux', defenses_bypassed: ['File monitoring'], 
+        permissions_required: 'root', system_requirements: ['Privilegios para acceder a ciertos archivos y directorios']})
+
+// Creación de relaciones con propiedades adicionales
+CREATE 
+    (u1)-[:CONECTA {puerto: 80, protocolo: 'HTTP'}]->(s1),
+    (u2)-[:CONECTA {puerto: 80, protocolo: 'HTTP'}]->(s1),
+    (u3)-[:CONECTA {puerto: 80, protocolo: 'HTTP'}]->(s1),
+
+    (s1)-[:PROTEGIDO_POR]->(fw),
+    (s2)-[:PROTEGIDO_POR]->(fw),
+
+    (s1)-[:CONECTA {puerto: 3306, protocolo: 'MySQL'}]->(s2),
+
+    (app1)-[:ALOJADO_EN]->(s1),
+    (app2)-[:ALOJADO_EN]->(s2);
+

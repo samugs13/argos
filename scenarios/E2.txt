@@ -1,0 +1,74 @@
+// Nodos de activos en red segmentada por departamentos
+CREATE 
+    // Usuarios
+    (fin1:Activo:Usuario {name: 'EmpleadoFinanzas1', sistema: 'Windows 10', ip: '10.0.10.10', 
+        platform: 'Windows', defenses_bypassed: ['Anti-virus'], 
+        permissions_required: 'User', system_requirements: ['Credenciales válidas']}),
+
+    (fin2:Activo:Usuario {name: 'EmpleadoFinanzas2', sistema: 'Windows 10', ip: '10.0.10.11', 
+        platform: 'Windows', defenses_bypassed: ['Anti-virus'], 
+        permissions_required: 'User', system_requirements: ['Credenciales válidas']}),
+
+    (rh1:Activo:Usuario {name: 'EmpleadoRH1', sistema: 'Windows 10', ip: '10.0.20.10', 
+        platform: 'Windows', defenses_bypassed: ['Anti-virus'], 
+        permissions_required: 'User', system_requirements: ['Credenciales válidas']}),
+
+    (rh2:Activo:Usuario {name: 'EmpleadoRH2', sistema: 'macOS', ip: '10.0.20.11', 
+        platform: 'macOS', defenses_bypassed: ['Application control'], 
+        permissions_required: 'User', system_requirements: ['Credenciales válidas']}),
+
+    // Servidores por segmento
+    (srvFin:Activo:Servidor {name: 'ServidorFinanzas', sistema: 'Ubuntu 20.04', ip: '10.0.10.20', 
+        servicios: ['FTP', 'MySQL'], vulnerabilidades: ['CVE-2022-1096'], platform: 'Linux', 
+        defenses_bypassed: ['Firewall'], permissions_required: 'root', 
+        system_requirements: ['Privilegios para acceder a datos financieros']}),
+
+    (srvRH:Activo:Servidor {name: 'ServidorRH', sistema: 'Ubuntu 18.04', ip: '10.0.20.20', 
+        servicios: ['HTTP', 'HTTPS'], vulnerabilidades: ['CVE-2021-22945'], platform: 'Linux', 
+        defenses_bypassed: ['Firewall'], permissions_required: 'root', 
+        system_requirements: ['Privilegios para acceder a datos de recursos humanos']}),
+
+    // Servidor de autenticación compartido
+    (srvAuth:Activo:Servidor {name: 'ServidorAutenticacion', sistema: 'Windows Server 2019', ip: '10.0.0.5', 
+        servicios: ['Kerberos', 'LDAP'], vulnerabilidades: [], platform: 'Windows', 
+        defenses_bypassed: ['Firewall', 'Host forensic analysis'], permissions_required: 'Administrator', 
+        system_requirements: ['Servicios de autenticación activos']}),
+
+    // Dispositivo de red (Firewall central)
+    (fwCorp:Activo:DispositivoRed {name: 'FirewallCentral', tipo: 'Firewall', ip: '10.0.0.1', 
+        reglas: ['Permitir: FTP, MySQL en Finanzas', 'Permitir: HTTP, HTTPS en RH'], platform: 'Network', 
+        defenses_bypassed: [], permissions_required: 'Administrator', 
+        system_requirements: ['Presencia de dispositivo físico']}),
+
+    // Aplicaciones en los servidores
+    (appFin:Activo:Aplicacion {name: 'MySQL Finance', version: '5.7', vulnerabilidades: ['CVE-2020-14882'], 
+        platform: 'Linux', defenses_bypassed: ['File monitoring'], 
+        permissions_required: 'root', system_requirements: ['Base de datos activa']}),
+
+    (appRH:Activo:Aplicacion {name: 'Apache RH', version: '2.4.49', vulnerabilidades: [], 
+        platform: 'Linux', defenses_bypassed: ['Digital Certificate Validation'], 
+        permissions_required: 'root', system_requirements: ['Servidor web activo']})
+
+// Relaciones y conexiones entre activos
+CREATE 
+    // Conexión entre usuarios y servidores de su departamento
+    (fin1)-[:CONECTA {puerto: 21, protocolo: 'FTP'}]->(srvFin),
+    (fin2)-[:CONECTA {puerto: 3306, protocolo: 'MySQL'}]->(srvFin),
+    (rh1)-[:CONECTA {puerto: 443, protocolo: 'HTTPS'}]->(srvRH),
+    (rh2)-[:CONECTA {puerto: 80, protocolo: 'HTTP'}]->(srvRH),
+
+    // Servidores protegidos por firewall centralizado
+    (srvFin)-[:PROTEGIDO_POR]->(fwCorp),
+    (srvRH)-[:PROTEGIDO_POR]->(fwCorp),
+    (srvAuth)-[:PROTEGIDO_POR]->(fwCorp),
+
+    // Usuarios y servidores conectados al servidor de autenticación
+    (fin1)-[:AUTENTICA_EN {protocolo: 'Kerberos'}]->(srvAuth),
+    (rh1)-[:AUTENTICA_EN {protocolo: 'Kerberos'}]->(srvAuth),
+    (srvFin)-[:AUTENTICA_EN {protocolo: 'LDAP'}]->(srvAuth),
+    (srvRH)-[:AUTENTICA_EN {protocolo: 'LDAP'}]->(srvAuth),
+
+    // Aplicaciones alojadas en servidores específicos
+    (appFin)-[:ALOJADO_EN]->(srvFin),
+    (appRH)-[:ALOJADO_EN]->(srvRH);
+

@@ -1,0 +1,71 @@
+// Nodos de activos en red de desarrollo con contenedores
+CREATE 
+    // Usuarios
+    (dev1:Activo:Usuario {name: 'Desarrollador1', sistema: 'Ubuntu 20.04', ip: '192.168.30.10', 
+        platform: 'Linux', defenses_bypassed: ['Anti-virus'], 
+        permissions_required: 'User', system_requirements: ['Credenciales válidas']}),
+
+    (dev2:Activo:Usuario {name: 'Desarrollador2', sistema: 'Windows 10', ip: '192.168.30.11', 
+        platform: 'Windows', defenses_bypassed: ['Anti-virus'], 
+        permissions_required: 'User', system_requirements: ['Credenciales válidas']}),
+
+    // Servidor de orquestación de contenedores
+    (srvOrq:Activo:Servidor {name: 'ServidorOrquestacion', sistema: 'CentOS 8', ip: '192.168.30.20', 
+        servicios: ['Docker', 'Kubernetes'], vulnerabilidades: ['CVE-2021-21284'], platform: 'Linux', 
+        defenses_bypassed: ['Firewall'], permissions_required: 'Administrator', 
+        system_requirements: ['Permisos de administrador en contenedores']}),
+
+    // Contenedores específicos
+    (contApp:Activo:Servidor {name: 'ContenedorApp', sistema: 'Docker', ip: '172.17.0.2', 
+        servicios: ['Node.js'], vulnerabilidades: [], platform: 'Containers', 
+        defenses_bypassed: ['File monitoring'], permissions_required: 'Administrator', 
+        system_requirements: ['Docker activo']}),
+
+    (contDB:Activo:Servidor {name: 'ContenedorDB', sistema: 'Docker', ip: '172.17.0.3', 
+        servicios: ['MongoDB'], vulnerabilidades: ['CVE-2021-20329'], platform: 'Containers', 
+        defenses_bypassed: ['Host intrusion prevention systems'], 
+        permissions_required: 'Administrator', system_requirements: ['Docker activo']}),
+
+    // Dispositivo IoT para pruebas
+    (iot:Activo:DispositivoIoT {name: 'CamaraIoT', tipo: 'Camara de Seguridad', ip: '192.168.30.15', 
+        platform: 'IoT', defenses_bypassed: ['Host forensic analysis'], 
+        permissions_required: 'User', system_requirements: ['Dispositivo físico conectado']}),
+
+    // Dispositivo de red (Firewall del entorno)
+    (fwDev:Activo:DispositivoRed {name: 'FirewallDesarrollo', tipo: 'Firewall', ip: '192.168.30.1', 
+        reglas: ['Permitir: Docker, Kubernetes', 'Bloquear: SMB'], platform: 'Network', 
+        defenses_bypassed: [], permissions_required: 'Administrator', 
+        system_requirements: ['Dispositivo físico']}),
+
+    // Aplicaciones en contenedores
+    (appNode:Activo:Aplicacion {name: 'Node.js API', version: '14.17.3', vulnerabilidades: [], 
+        platform: 'Containers', defenses_bypassed: ['Digital Certificate Validation'], 
+        permissions_required: 'Administrator', system_requirements: ['Docker activo']}),
+
+    (appMongo:Activo:Aplicacion {name: 'MongoDB', version: '4.4', vulnerabilidades: ['CVE-2021-20329'], 
+        platform: 'Containers', defenses_bypassed: ['File monitoring'], 
+        permissions_required: 'Administrator', system_requirements: ['Docker activo']})
+
+// Relaciones y conexiones entre activos
+CREATE 
+    // Conexión entre usuarios y el servidor de orquestación
+    (dev1)-[:CONECTA {puerto: 6443, protocolo: 'Kubernetes'}]->(srvOrq),
+    (dev2)-[:CONECTA {puerto: 2375, protocolo: 'Docker'}]->(srvOrq),
+
+    // Servidor de orquestación protegido por el firewall
+    (srvOrq)-[:PROTEGIDO_POR]->(fwDev),
+
+    // Contenedores interconectados
+    (contApp)-[:CONECTA {puerto: 27017, protocolo: 'MongoDB'}]->(contDB),
+
+    // Usuarios y contenedores conectados al servidor de orquestación
+    (dev1)-[:DESPLIEGA {protocolo: 'Docker'}]->(contApp),
+    (dev2)-[:DESPLIEGA {protocolo: 'Docker'}]->(contDB),
+
+    // IoT protegido por firewall
+    (iot)-[:PROTEGIDO_POR]->(fwDev),
+
+    // Aplicaciones alojadas en contenedores específicos
+    (appNode)-[:ALOJADO_EN]->(contApp),
+    (appMongo)-[:ALOJADO_EN]->(contDB);
+
