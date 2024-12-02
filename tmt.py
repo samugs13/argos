@@ -10,12 +10,14 @@ from neo4j.exceptions import Neo4jError
 from collections import deque
 import sys
 import pandas as pd
+import json
+from collections import defaultdict
 from rich.text import Text
 from rich.layout import Layout
 from rich.panel import Panel
 from rich.align import Align
 from rich.bar import Bar
-from rich.console import Console, Group
+from rich.console import Group
 from rich.table import Table
 from rich import print as print
 from collections import Counter
@@ -129,7 +131,7 @@ def generate_markov_sequence():
 
 def create_scenario_graph(driver, scenario_file):
     global current_scenario
-    current_scenario=os.path.basename(scenario_file)
+    current_scenario=os.path.basename(scenario_file)[:-4]
     guardar_escenario(current_scenario)
     try:
         with driver.session() as session:
@@ -139,34 +141,52 @@ def create_scenario_graph(driver, scenario_file):
                 
                 # Ejecutar el contenido en Neo4j
                 session.run(query)
-                print(f"\n[green][+][reset] Escenario desde '{current_scenario}' insertado en Neo4j.\n")
+                print(f"\n[green][+][reset] Escenario '{current_scenario}' insertado en Neo4j desde el fichero '{scenario_file}'.\n")
     
     except Neo4jError as e:
         print("\n[red][+][reset] Error connecting to Neo4j: " + f"{e}")
         exit(1)
 
-# Función para cargar el mapeo de técnicas a activos desde un archivo CSV
-def load_techniques(csv_file):
-    mapping = {}
-    with open(csv_file, 'r', encoding='utf-8') as file:
-        reader = csv.DictReader(file)
-        for row in reader:
-            technique = row['tecnica']
-            asset = row['activo']
-            
-            if technique not in mapping:
-                mapping[technique] = []
-            mapping[technique].append(asset)
-    return mapping
+def load_cwes_json(json_file):
+    
+    with open(json_file, 'r') as file:
+        data = json.load(file)
+
+    ttp_to_cwes = defaultdict(set)
+
+    for entry in data:
+        # Redondear el TTP al nivel principal
+        ttp_main = entry["TTP"].split('.')[0]
+        for cwe in entry.get("CWEs", []):
+            ttp_to_cwes[ttp_main].add(cwe["CWE"])
+
+    # Convertimos sets a listas para el resultado final
+    return {ttp: list(cwes) for ttp, cwes in ttp_to_cwes.items()}
+
+def load_cves_json(json_file):
+    with open(json_file, 'r') as file:
+        data = json.load(file)
+
+    ttp_to_cves = defaultdict(set)
+
+    for entry in data:
+        # Redondear el TTP al nivel principal
+        ttp_main = entry["TTP"].split('.')[0]
+        for cwe in entry.get("CWEs", []):
+            for cve in cwe.get("CVEs", []):
+                ttp_to_cves[ttp_main].add(cve)
+
+    # Convertimos sets a listas para el resultado final
+    return {ttp: list(cves) for ttp, cves in ttp_to_cves.items()}
 
 # Función para cargar el mapeo de técnicas a activos desde el archivo JSON
 def load_techniques_json(json_file):
-    mapping = {}
+    techniques = {}
     with open(json_file, 'r', encoding='utf-8') as file:
         data = json.load(file)
         for entry in data:
             technique_id = entry["ID"]
-            mapping[technique_id] = {
+            techniques[technique_id] = {
                 "name": entry.get("name", "Desconocido"),
                 "tactic": entry.get("tactics", "Desconocido"),
                 "platforms": entry.get("platforms", "Desconocido"),
@@ -175,18 +195,29 @@ def load_techniques_json(json_file):
                 "system_requirements": entry.get("system requirements", "Desconocido"),
                 "effective_permissions": entry.get("effective permissions", "Desconocido")
             }
-    return mapping
+    return techniques
 
-def create_attack_graph(driver, chain, mapping):
+def load_mitigations_json(json_file):
+    mitigations = {}
+    with open(json_file, "r") as file:
+        data = json.load(file)
+        for item in data:
+            source_name = item["source name"]
+            target_ids = item["target ID"]
+            for target_id in target_ids:
+                mitigations[target_id] = source_name
+    return mitigations
+
+def create_attack_graph(driver, chain, techniques, cves, cwes):
     try:
         with driver.session() as session:
             for i in range(len(chain) - 1):
                 origin_state = chain[i]
                 destination_state = chain[i + 1]
-
+                
                 # Obtener la información de la técnica para los atributos necesarios
-                origin_technique_info = mapping.get(origin_state, {})
-                dest_technique_info = mapping.get(destination_state, {})
+                origin_technique_info = techniques.get(origin_state, {})
+                dest_technique_info = techniques.get(destination_state, {})
 
                 # Convertir atributos a listas si no lo son
                 origin_platforms = origin_technique_info.get("platforms")
@@ -209,6 +240,10 @@ def create_attack_graph(driver, chain, mapping):
 
                 origin_name = origin_technique_info.get("name")
 
+                # Extraer CWEs y CVEs para esa TTP
+                origin_cwes = cwes.get(origin_state, [])  # Si no hay datos, devuelve una lista vacía
+                origin_cves = cves.get(origin_state, [])
+
                 # Repetir el mismo proceso para el destino
                 dest_platforms = dest_technique_info.get("platforms")
                 if isinstance(dest_platforms, str):
@@ -230,6 +265,10 @@ def create_attack_graph(driver, chain, mapping):
 
                 dest_name = dest_technique_info.get("name")
 
+                # Extraer CWEs y CVEs para esa TTP
+                dest_cwes = cwes.get(destination_state, [])  # Si no hay datos, devuelve una lista vacía
+                dest_cves = cves.get(destination_state, [])
+
                 # Crear nodos de estado con atributos completos
                 session.run("""
                     MERGE (a:Estado {
@@ -237,21 +276,26 @@ def create_attack_graph(driver, chain, mapping):
                         technique: $name_origen,
                         platforms: $platforms_origen,
                         permissions_required: $permissions_origen,
-                        defenses_bypassed: $defenses_origen
+                        defenses_bypassed: $defenses_origen,
+                        CWEs: $cwes_origen,
+                        CVEs: $cves_origen
                     })
                     MERGE (b:Estado {
                         nombre: $estado_destino,
                         technique: $name_destino,
                         platforms: $platforms_destino,
                         permissions_required: $permissions_destino,
-                        defenses_bypassed: $defenses_destino
+                        defenses_bypassed: $defenses_destino,
+                        CWEs: $cwes_destino,
+                        CVEs: $cves_destino
                     })
                     MERGE (a)-[:TRANSICION_A]->(b)
                 """, 
                 estado_origen=origin_state, name_origen=origin_name, platforms_origen=origin_platforms,
                 permissions_origen=origin_permissions, defenses_origen=origin_defenses_bypassed,
                 estado_destino=destination_state, name_destino=dest_name, platforms_destino=dest_platforms,
-                permissions_destino=dest_permissions, defenses_destino=dest_defenses_bypassed)
+                permissions_destino=dest_permissions, defenses_destino=dest_defenses_bypassed,
+                cwes_origen=origin_cwes, cves_origen=origin_cves, cwes_destino=dest_cwes, cves_destino=dest_cves)
 
             print("[green][+][reset] Secuencia de ataque insertada en Neo4j.\n")
 
@@ -259,7 +303,7 @@ def create_attack_graph(driver, chain, mapping):
         print("\n[red][+][reset] Error connecting to Neo4j: " + f"{e}")
         exit(1)
 
-def link_attack_to_scenario(driver, chain, mapping):
+def link_attack_to_scenario(driver, chain, techniques, cves, cwes):
     
     affected_assets = []
     affecting_techniques_ids = []
@@ -270,7 +314,7 @@ def link_attack_to_scenario(driver, chain, mapping):
         with driver.session() as session:
             for state in chain:
                 # Obtener la información de la técnica actual
-                technique_info = mapping.get(state, {})
+                technique_info = techniques.get(state, {})
                 
                 platforms = technique_info.get("platforms", [])
                 if isinstance(platforms, str):
@@ -290,17 +334,22 @@ def link_attack_to_scenario(driver, chain, mapping):
                 elif isinstance(defenses_bypassed, str):
                     defenses_bypassed = [defenses_bypassed]
                 defenses_bypassed = [defense.strip() for d in defenses_bypassed for defense in d.split(",")]
+
+                state_cwes = cwes.get(state, [])
+                state_cves = cves.get(state, [])
                 
                 # Realizar el MATCH en Neo4j con los filtros de plataforma, permisos y defensas
                 result = session.run("""
                     MATCH (a:Activo)
-                    WHERE a.platform IN $platforms
-                      AND ANY(permiso IN a.permissions_required WHERE permiso IN $permissions)
+                    WHERE (a.platform IN $platforms
+                      AND ANY(permiso IN a.permissions_required WHERE permiso IN $permissions))
+                      OR a.cve IN $CVEs
                     MATCH (e:Estado {nombre: $estado})
                     MATCH (n:Activo) 
                     MERGE (e)-[:AFECTA_A]->(a)
                     RETURN a.name, e.nombre, e.technique, count(n) AS total_activos
-                """, platforms=platforms, defenses_bypassed=defenses_bypassed, permissions=permissions, estado=state)
+                """, platforms=platforms, defenses_bypassed=defenses_bypassed, permissions=permissions,
+                     CVEs=state_cves, estado=state)
                 
                 # Iterar sobre los registros en el resultado
                 for record in result:
@@ -320,6 +369,7 @@ def link_attack_to_scenario(driver, chain, mapping):
         exit(1)
 
 def create_dashboard(affected_assets, affecting_techniques_ids, affecting_techniques_names, total_assets, chain):
+    
     if len(affected_assets) != len(affecting_techniques_ids):
         print("\n[red][+][reset] Error: Las listas deben tener la misma longitud.")
         return
@@ -346,7 +396,7 @@ def create_dashboard(affected_assets, affecting_techniques_ids, affecting_techni
     defense_content = "\n"
     for asset, technique_id, technique_name in zip(affected_assets, affecting_techniques_ids, affecting_techniques_names):
         # Generar la cadena de texto con formato
-        defense_content += f"[b]·[reset] Activo [u]{asset}[reset]\tcomprometido por [u]{technique_id} - {technique_name}[reset]\n"
+        defense_content += f"[b]·[reset] Activo [u]{asset}[reset] comprometido por [u]{technique_id} - {technique_name}[reset]\n"
 
     # Crear un Panel con el contenido generado
     defense_panel = Panel(defense_content, title="[b blue]:shield: DEFENSA", padding=(0, 1), border_style="blue")
@@ -362,12 +412,16 @@ def create_dashboard(affected_assets, affecting_techniques_ids, affecting_techni
     max_freq = max(counter.values())
     most_affecting_techniques = [tech for tech, frecuencia in counter.items() if frecuencia == max_freq]
     mat_str = ", ".join(most_affecting_techniques)
-
+    
+    # Obtener mitigaciones asociadas a las técnicas más exitosas
+    mitigations = load_mitigations_json('ttp_mitigations.json')
+    unique_mitigations = list({mitigations[tech] for tech in most_affecting_techniques if tech in mitigations})
+    mit_str = ", ".join(unique_mitigations)
 
     activos_panel = Panel(
         f"\n[b]Total de activos:[reset]\t{total_assets}\n"
-        f"\n[b]Activos afectados:[reset]\t{affected_assets_count}\n"
-        f"\n[b]Activos seguros:[reset]\t{secure_assets}\n"
+        f"\n[b]Activos afectados:[reset]\t{affected_assets_count} ({round(100*affected_assets_count/total_assets, 1)}%)\n"
+        f"\n[b]Activos seguros:[reset]\t{secure_assets} ({round(100*secure_assets/total_assets, 1)}%)\n"
         f"\n[b]Activo(s) más afectado(s):[reset] {maa_str} ({max_freq} veces)\n",
         title="[b green]:laptop_computer: ACTIVOS",
         padding=(0, 1),
@@ -378,7 +432,8 @@ def create_dashboard(affected_assets, affecting_techniques_ids, affecting_techni
         f"\n[b]Técnicas en la secuencia:[reset]\t{len(chain)}\n"
         f"\n[b]Técnicas distintas empleadas:[reset]\t{len(set(chain))}\n"
         f"\n[b]Total técnicas exitosas:[reset]\t{successful_techniques_count}\n"
-        f"\n[b]Técnica más exitosa:[reset] {mat_str} ({max_freq} veces)\n",
+        f"\n[b]Técnica más exitosa:[reset] {mat_str} ({max_freq} veces)\n"
+        f"\n[b]Mitigación recomendada:[reset] {mit_str}\n",
         title="[b red]:old_key: TÉCNICAS",
         padding=(0, 1),
         border_style="red"
@@ -398,7 +453,6 @@ def create_dashboard(affected_assets, affecting_techniques_ids, affecting_techni
     # Crear y mostrar la barra de gravedad del ataque con color condicional y centrada
     bar = Bar(size=100, begin=0, end=attack_severity, color=bar_color, bgcolor="black", width=40)
     criticity_text = Text(f"{attack_severity} - {criticity}")
-
 
     bar_panel = Panel(
         Align.center(
@@ -440,7 +494,6 @@ def create_dashboard(affected_assets, affecting_techniques_ids, affecting_techni
     attack_id = f"Ataque-{random.randint(1000, 9999)}"
     scenario=cargar_escenario()
     save_attack_stats_csv(attack_id, scenario, maa_str, mat_str)
-
 
     from rich.live import Live
     # Mantener el layout visible usando Live
@@ -537,6 +590,7 @@ def help():
     print("[yellow]\tgenerate:" + "[reset]\tGenerar y mostrar secuencia de ataque.")
     print("[yellow]\tprepare:" + "[reset]\tCargar escenario de red enviado como parámetro en Neo4j.")
     print("[yellow]\tattack:" + "[reset]\t\tGenerar ataque y dirigirlo al escenario creado.")
+    print("[yellow]\thistory:" + "[reset]\tMostrar historial de ataques.")
     print("[yellow]\tclean:" + "[reset]\t\tLimpiar base de datos.\n")
  
 def main():
@@ -570,10 +624,12 @@ def main():
 
     elif str(sys.argv[1]) == "attack":
         chain = generate_markov_sequence()    
-        mapping = load_techniques_json('tecnicas_completo.json')
+        techniques = load_techniques_json('tecnicas_completo.json')
+        cves = load_cves_json('ttp_cwe_cve.json')
+        cwes = load_cwes_json('ttp_cwe_cve.json')
         driver = start_neo4j()
-        create_attack_graph(driver, chain, mapping)
-        link_attack_to_scenario(driver, chain, mapping)
+        create_attack_graph(driver, chain, techniques, cves, cwes)
+        link_attack_to_scenario(driver, chain, techniques, cves, cwes)
         
         close_neo4j(driver)
         exit(0)
