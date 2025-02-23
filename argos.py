@@ -131,7 +131,7 @@ def generate_markov_sequence():
 
 def create_scenario_graph(driver, scenario_file):
     global current_scenario
-    current_scenario=os.path.basename(scenario_file)[:-4]
+    current_scenario=os.path.basename(scenario_file)[:-7]
     guardar_escenario(current_scenario)
     try:
         with driver.session() as session:
@@ -232,11 +232,11 @@ def create_attack_graph(driver, chain, techniques, cves, cwes):
                 elif origin_permissions is None:
                     origin_permissions = []
                 
-                origin_defenses_bypassed = origin_technique_info.get("defenses_bypassed")
-                if isinstance(origin_defenses_bypassed, str):
-                    origin_defenses_bypassed = [origin_defenses_bypassed]
-                elif origin_defenses_bypassed is None:
-                    origin_defenses_bypassed = []
+                origin_requirements = origin_technique_info.get("system_requirements")
+                if isinstance(origin_requirements, str):
+                    origin_requirements = [origin_requirements]
+                elif origin_requirements is None:
+                    origin_requirements = []
 
                 origin_name = origin_technique_info.get("name")
 
@@ -257,11 +257,11 @@ def create_attack_graph(driver, chain, techniques, cves, cwes):
                 elif dest_permissions is None:
                     dest_permissions = []
 
-                dest_defenses_bypassed = dest_technique_info.get("defenses_bypassed")
-                if isinstance(dest_defenses_bypassed, str):
-                    dest_defenses_bypassed = [dest_defenses_bypassed]
-                elif dest_defenses_bypassed is None:
-                    dest_defenses_bypassed = []
+                dest_requirements = dest_technique_info.get("system_requirements")
+                if isinstance(dest_requirements, str):
+                    dest_requirements = [dest_requirements]
+                elif dest_requirements is None:
+                    dest_requirements = []
 
                 dest_name = dest_technique_info.get("name")
 
@@ -276,7 +276,7 @@ def create_attack_graph(driver, chain, techniques, cves, cwes):
                         technique: $name_origen,
                         platforms: $platforms_origen,
                         permissions_required: $permissions_origen,
-                        defenses_bypassed: $defenses_origen,
+                        system_requirements: $requirements_origen,
                         CWEs: $cwes_origen,
                         CVEs: $cves_origen
                     })
@@ -285,16 +285,16 @@ def create_attack_graph(driver, chain, techniques, cves, cwes):
                         technique: $name_destino,
                         platforms: $platforms_destino,
                         permissions_required: $permissions_destino,
-                        defenses_bypassed: $defenses_destino,
+                        system_requirements: $requirements_destino,
                         CWEs: $cwes_destino,
                         CVEs: $cves_destino
                     })
                     MERGE (a)-[:TRANSICION_A]->(b)
                 """, 
                 estado_origen=origin_state, name_origen=origin_name, platforms_origen=origin_platforms,
-                permissions_origen=origin_permissions, defenses_origen=origin_defenses_bypassed,
+                permissions_origen=origin_permissions, requirements_origen=origin_requirements,
                 estado_destino=destination_state, name_destino=dest_name, platforms_destino=dest_platforms,
-                permissions_destino=dest_permissions, defenses_destino=dest_defenses_bypassed,
+                permissions_destino=dest_permissions, requirements_destino=dest_requirements,
                 cwes_origen=origin_cwes, cves_origen=origin_cves, cwes_destino=dest_cwes, cves_destino=dest_cves)
 
             print("[green][+][reset] Secuencia de ataque insertada en Neo4j.\n")
@@ -328,12 +328,12 @@ def link_attack_to_scenario(driver, chain, techniques, cves, cwes):
                     permissions = [permissions]
                 permissions = [permission.strip() for p in permissions for permission in p.split(",")]
                 
-                defenses_bypassed = technique_info.get("defenses_bypassed", [])
-                if defenses_bypassed is None:
-                    defenses_bypassed = []
-                elif isinstance(defenses_bypassed, str):
-                    defenses_bypassed = [defenses_bypassed]
-                defenses_bypassed = [defense.strip() for d in defenses_bypassed for defense in d.split(",")]
+                requirements = technique_info.get("system_requirements", [])
+                if requirements is None:
+                    requirements = []
+                elif isinstance(requirements, str):
+                    requirements = [requirements]
+                requirements = [req.strip() for r in requirements for req in r.split(",")]
 
                 state_cwes = cwes.get(state, [])
                 state_cves = cves.get(state, [])
@@ -341,14 +341,14 @@ def link_attack_to_scenario(driver, chain, techniques, cves, cwes):
                 # Realizar el MATCH en Neo4j con los filtros de plataforma, permisos y defensas
                 result = session.run("""
                     MATCH (a:Activo)
-                    WHERE (a.platform IN $platforms
-                      AND ANY(permiso IN a.permissions_required WHERE permiso IN $permissions))
+                    WHERE (a.platform IN $platforms AND (ANY(permiso IN a.permissions WHERE permiso IN $permissions)
+                      OR ANY(capacidad IN a.capabilities WHERE capacidad IN $requirements)))
                       OR a.cve IN $CVEs
                     MATCH (e:Estado {nombre: $estado})
                     MATCH (n:Activo) 
                     MERGE (e)-[:AFECTA_A]->(a)
                     RETURN a.name, e.nombre, e.technique, count(n) AS total_activos
-                """, platforms=platforms, defenses_bypassed=defenses_bypassed, permissions=permissions,
+                """, platforms=platforms, requirements=requirements, permissions=permissions,
                      CVEs=state_cves, estado=state)
                 
                 # Iterar sobre los registros en el resultado
@@ -502,9 +502,9 @@ def create_dashboard(affected_assets, affecting_techniques_ids, affecting_techni
 
 def save_attack_stats_csv(attack_id, scenario, most_affected_asset, most_recurrent_asset):
     # Verifica si el archivo ya existe para añadir encabezados solo en caso necesario
-    file_exists = os.path.isfile('historial_ataques.csv')
+    file_exists = os.path.isfile('attack_history.csv')
 
-    with open('historial_ataques.csv', mode='a', newline='', encoding='utf-8') as file:
+    with open('attack_history.csv', mode='a', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
         if not file_exists:
             # Escribe los encabezados si el archivo se está creando
@@ -513,11 +513,11 @@ def save_attack_stats_csv(attack_id, scenario, most_affected_asset, most_recurre
         # Registra los datos del ataque
         writer.writerow([attack_id, scenario, most_affected_asset, most_recurrent_asset, str(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))])
     
-    print(f"[green][+][reset] Estadísticas del ataque {attack_id} guardadas en historial_ataques.csv.\n")
+    print(f"[green][+][reset] Estadísticas del ataque {attack_id} guardadas en attack_history.csv.\n")
 
 def display_attack_history_csv():
     try:
-        df = pd.read_csv('historial_ataques.csv', skipinitialspace = True,quotechar='"')
+        df = pd.read_csv('attack_history.csv', skipinitialspace = True,quotechar='"')
 
         table = Table(title="Historial de ataques")
         rows = df.values.tolist()
@@ -533,7 +533,7 @@ def display_attack_history_csv():
         print(Align.center(table))
 
     except FileNotFoundError:
-        print("\n[red][+][reset] No se ha encontrado el archivo historial_ataques.csv. Ejecuta al menos un ataque para generar el historial.\n")
+        print("\n[red][+][reset] No se ha encontrado el archivo attack_history.csv. Ejecuta al menos un ataque para generar el historial.\n")
 
 def clean_database(driver):
     try:
@@ -573,7 +573,7 @@ def start_neo4j():
     # Conectar a la base de datos de Neo4j
     uri = "bolt://localhost:7687"
     user = "neo4j"
-    password = "markov123"
+    password = "argos123"
     driver = connect_neo4j(uri, user, password)
     return driver
 
@@ -630,7 +630,6 @@ def main():
         driver = start_neo4j()
         create_attack_graph(driver, chain, techniques, cves, cwes)
         link_attack_to_scenario(driver, chain, techniques, cves, cwes)
-        
         close_neo4j(driver)
         exit(0)
 
