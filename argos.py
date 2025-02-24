@@ -272,8 +272,8 @@ def create_attack_graph(driver, chain, techniques, cves, cwes):
                 # Crear nodos de estado con atributos completos
                 session.run("""
                     MERGE (t1:Técnica {
-                        name: $estado_origen,
-                        technique: $name_origen,
+                        id: $estado_origen,
+                        name: $name_origen,
                         platforms: $platforms_origen,
                         permissions_required: $permissions_origen,
                         system_requirements: $requirements_origen,
@@ -281,8 +281,8 @@ def create_attack_graph(driver, chain, techniques, cves, cwes):
                         CVEs: $cves_origen
                     })
                     MERGE (t2:Técnica {
-                        name: $estado_destino,
-                        technique: $name_destino,
+                        id: $estado_destino,
+                        name: $name_destino,
                         platforms: $platforms_destino,
                         permissions_required: $permissions_destino,
                         system_requirements: $requirements_destino,
@@ -344,18 +344,18 @@ def link_attack_to_scenario(driver, chain, techniques, cves, cwes):
                     WHERE (a.platform IN $platforms AND (ANY(permiso IN a.permissions WHERE permiso IN $permissions)
                       OR ANY(capacidad IN a.capabilities WHERE capacidad IN $requirements)))
                       OR a.cve IN $CVEs
-                    MATCH (t:Técnica {name: $estado})
+                    MATCH (t:Técnica {id: $estado})
                     MATCH (n:Activo) 
                     MERGE (t)-[:EXPLOTACIÓN]->(a)
-                    RETURN a.name, t.name, t.technique, count(n) AS total_activos
+                    RETURN a.name, t.id, t.name, count(n) AS total_activos
                 """, platforms=platforms, requirements=requirements, permissions=permissions,
                      CVEs=state_cves, estado=state)
                 
                 # Iterar sobre los registros en el resultado
                 for record in result:
                     asset = record["a.name"]
-                    technique_id = record["t.name"]
-                    technique_name = record["t.technique"]
+                    technique_id = record["t.id"]
+                    technique_name = record["t.name"]
                     total_assets = record["total_activos"]
                     affected_assets.append(asset)
                     affecting_techniques_ids.append(technique_id)
