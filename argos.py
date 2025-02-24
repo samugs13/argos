@@ -123,7 +123,7 @@ def generate_markov_sequence():
         exit(0)
     else:
         # Simulación de la cadena de Markov
-        num_steps = 80  # Número de pasos a simular
+        num_steps = 80  # Número de pasos máximo a simular
         chain = simulate_chain(start_state, num_steps, transitions)
         print("[yellow][+][reset] Secuencia simulada de estados:", str(chain))
         print("\n")
@@ -271,8 +271,8 @@ def create_attack_graph(driver, chain, techniques, cves, cwes):
 
                 # Crear nodos de estado con atributos completos
                 session.run("""
-                    MERGE (a:Estado {
-                        nombre: $estado_origen,
+                    MERGE (t1:Técnica {
+                        name: $estado_origen,
                         technique: $name_origen,
                         platforms: $platforms_origen,
                         permissions_required: $permissions_origen,
@@ -280,8 +280,8 @@ def create_attack_graph(driver, chain, techniques, cves, cwes):
                         CWEs: $cwes_origen,
                         CVEs: $cves_origen
                     })
-                    MERGE (b:Estado {
-                        nombre: $estado_destino,
+                    MERGE (t2:Técnica {
+                        name: $estado_destino,
                         technique: $name_destino,
                         platforms: $platforms_destino,
                         permissions_required: $permissions_destino,
@@ -289,7 +289,7 @@ def create_attack_graph(driver, chain, techniques, cves, cwes):
                         CWEs: $cwes_destino,
                         CVEs: $cves_destino
                     })
-                    MERGE (a)-[:TRANSICION_A]->(b)
+                    MERGE (t1)-[:TRANSICIÓN]->(t2)
                 """, 
                 estado_origen=origin_state, name_origen=origin_name, platforms_origen=origin_platforms,
                 permissions_origen=origin_permissions, requirements_origen=origin_requirements,
@@ -344,18 +344,18 @@ def link_attack_to_scenario(driver, chain, techniques, cves, cwes):
                     WHERE (a.platform IN $platforms AND (ANY(permiso IN a.permissions WHERE permiso IN $permissions)
                       OR ANY(capacidad IN a.capabilities WHERE capacidad IN $requirements)))
                       OR a.cve IN $CVEs
-                    MATCH (e:Estado {nombre: $estado})
+                    MATCH (t:Técnica {name: $estado})
                     MATCH (n:Activo) 
-                    MERGE (e)-[:AFECTA_A]->(a)
-                    RETURN a.name, e.nombre, e.technique, count(n) AS total_activos
+                    MERGE (t)-[:EXPLOTACIÓN]->(a)
+                    RETURN a.name, t.name, t.technique, count(n) AS total_activos
                 """, platforms=platforms, requirements=requirements, permissions=permissions,
                      CVEs=state_cves, estado=state)
                 
                 # Iterar sobre los registros en el resultado
                 for record in result:
                     asset = record["a.name"]
-                    technique_id = record["e.nombre"]
-                    technique_name = record["e.technique"]
+                    technique_id = record["t.name"]
+                    technique_name = record["t.technique"]
                     total_assets = record["total_activos"]
                     affected_assets.append(asset)
                     affecting_techniques_ids.append(technique_id)
