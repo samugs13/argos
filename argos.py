@@ -403,14 +403,14 @@ def create_dashboard(affected_assets, affecting_techniques_ids, affecting_techni
    
     # Calcular activos más afectados   
     counter = Counter(affected_assets)
-    max_freq = max(counter.values())
-    most_affected_assets = [activo for activo, frecuencia in counter.items() if frecuencia == max_freq]
+    max_asset_freq = max(counter.values())
+    most_affected_assets = [activo for activo, frecuencia in counter.items() if frecuencia == max_asset_freq]
     maa_str = ", ".join(most_affected_assets)
 
     # Calcular técnicas más exitosas   
     counter = Counter(affecting_techniques_ids)
-    max_freq = max(counter.values())
-    most_affecting_techniques = [tech for tech, frecuencia in counter.items() if frecuencia == max_freq]
+    max_tech_freq = max(counter.values())
+    most_affecting_techniques = [tech for tech, frecuencia in counter.items() if frecuencia == max_tech_freq]
     mat_str = ", ".join(most_affecting_techniques)
     
     # Obtener mitigaciones asociadas a las técnicas más exitosas
@@ -422,7 +422,7 @@ def create_dashboard(affected_assets, affecting_techniques_ids, affecting_techni
         f"\n[b]Total de activos:[reset]\t{total_assets}\n"
         f"\n[b]Activos afectados:[reset]\t{affected_assets_count} ({round(100*affected_assets_count/total_assets, 1)}%)\n"
         f"\n[b]Activos seguros:[reset]\t{secure_assets} ({round(100*secure_assets/total_assets, 1)}%)\n"
-        f"\n[b]Activo(s) más afectado(s):[reset] {maa_str} ({max_freq} veces)\n",
+        f"\n[b]Activo(s) más afectado(s):[reset] {maa_str} ({max_asset_freq} veces)\n",
         title="[b green]:laptop_computer: ACTIVOS",
         padding=(0, 1),
         border_style="green"
@@ -431,8 +431,8 @@ def create_dashboard(affected_assets, affecting_techniques_ids, affecting_techni
     tecnicas_panel = Panel(
         f"\n[b]Técnicas en la secuencia:[reset]\t{len(chain)}\n"
         f"\n[b]Técnicas distintas empleadas:[reset]\t{len(set(chain))}\n"
-        f"\n[b]Total técnicas exitosas:[reset]\t{successful_techniques_count}\n"
-        f"\n[b]Técnica más exitosa:[reset] {mat_str} ({max_freq} veces)\n"
+        f"\n[b]Técnicas exitosas:[reset]\t{successful_techniques_count}\n"
+        f"\n[b]Técnica más dañina:[reset] {mat_str} ({max_tech_freq} veces)\n"
         f"\n[b]Mitigación recomendada:[reset] {mit_str}\n",
         title="[b red]:old_key: TÉCNICAS",
         padding=(0, 1),
