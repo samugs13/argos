@@ -340,14 +340,15 @@ def link_attack_to_scenario(driver, chain, techniques, cves, cwes):
                 
                 # Realizar el MATCH en Neo4j con los filtros de plataforma, permisos y defensas
                 result = session.run("""
-                    MATCH (a:Activo)
-                    WHERE (a.platform IN $platforms AND (ANY(permiso IN a.permissions WHERE permiso IN $permissions)
-                      OR ANY(capacidad IN a.capabilities WHERE capacidad IN $requirements)))
+                MATCH (a:Activo)
+                WHERE (a.platform IN $platforms AND 
+                      (ANY(permiso IN a.permissions WHERE permiso IN $permissions)
+                      AND ($requirements IS NULL OR ANY(capacidad IN a.capabilities WHERE capacidad IN $requirements))))
                       OR a.cve IN $CVEs
-                    MATCH (t:Técnica {id: $estado})
-                    MATCH (n:Activo) 
-                    MERGE (t)-[:EXPLOTACIÓN]->(a)
-                    RETURN a.name, t.id, t.name, count(n) AS total_activos
+                MATCH (t:Técnica {id: $estado})
+                MATCH (n:Activo) 
+                MERGE (t)-[:EXPLOTACIÓN]->(a)
+                RETURN a.name, t.id, t.name, count(n) AS total_activos
                 """, platforms=platforms, requirements=requirements, permissions=permissions,
                      CVEs=state_cves, estado=state)
                 
