@@ -1,6 +1,14 @@
 CREATE
     (u1:Activo:Usuario {
-      name: 'Alice', 
+      name: 'Alice'
+    }),
+    
+    (u2:Activo:Usuario {
+      name: 'Bob' 
+    }),
+
+    (pc1:Activo:DispositivoRed {
+      name: 'PC1', 
       ip: '192.168.1.10', 
       platform: 'Windows', 
       permissions: ['User'], 
@@ -8,8 +16,8 @@ CREATE
       cve: ['CVE-2004-2227']
     }),
 
-    (u2:Activo:Usuario {
-      name: 'Bob', 
+    (pc2:Activo:DispositivoRed {
+      name: 'PC2', 
       ip: '192.168.1.11', 
       platform: 'Linux', 
       permissions: ['Administrator'], 
@@ -49,8 +57,10 @@ CREATE
     })
 
 CREATE 
-    (u1)-[:CONEXION {protocolo: 'LDAP'}]->(s1),
-    (u2)-[:CONEXION {protocolo: 'SMTP'}]->(s2),
+    (u1)-[:AUTENTICACION]->(pc1),
+    (u2)-[:AUTENTICACION]->(pc2),
+    (pc1)-[:CONEXION {protocolo: 'LDAP'}]->(s1),
+    (pc2)-[:CONEXION {protocolo: 'SMTP'}]->(s2),
     (s1)-[:CONEXION {puerto: 25, protocolo: 'SMTP'}]->(s2),
     (fw)-[:PROTECCION {tipo: 'Firewall'}]->(s1),
     (fw)-[:PROTECCION {tipo: 'Firewall'}]->(s2),

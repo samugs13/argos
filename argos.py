@@ -341,10 +341,12 @@ def link_attack_to_scenario(driver, chain, techniques, cves, cwes):
                 # Realizar el MATCH en Neo4j con los filtros de plataforma, permisos y defensas
                 result = session.run("""
                 MATCH (a:Activo)
-                WHERE (a.platform IN $platforms AND 
-                      (ANY(permiso IN a.permissions WHERE permiso IN $permissions)
-                      AND ($requirements IS NULL OR ANY(capacidad IN a.capabilities WHERE capacidad IN $requirements))))
-                      OR a.cve IN $CVEs
+                WHERE a.platform IN $platforms 
+                AND (
+                    $permissions IS NULL OR ANY(permiso IN a.permissions WHERE permiso IN $permissions)
+                    AND $requirements IS NULL OR ANY(capacidad IN a.capabilities WHERE capacidad IN $requirements)
+                )
+                OR a.cve IN $CVEs
                 MATCH (t:Técnica {id: $estado})
                 MATCH (n:Activo) 
                 MERGE (t)-[:EXPLOTACIÓN]->(a)
@@ -432,7 +434,7 @@ def create_dashboard(affected_assets, affecting_techniques_ids, affecting_techni
     tecnicas_panel = Panel(
         f"\n[b]Técnicas en la secuencia:[reset]\t{len(chain)}\n"
         f"\n[b]Técnicas distintas empleadas:[reset]\t{len(set(chain))}\n"
-        f"\n[b]Técnicas exitosas:[reset]\t{successful_techniques_count}\n"
+        f"\n[b]Técnicas exitosas:[reset]\t\t{successful_techniques_count}\n"
         f"\n[b]Técnica más dañina:[reset] {mat_str} ({max_tech_freq} veces)\n"
         f"\n[b]Mitigación recomendada:[reset] {mit_str}\n",
         title="[b red]:old_key: TÉCNICAS",
