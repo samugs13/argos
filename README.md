@@ -9,12 +9,12 @@
 Este repositorio contiene el código desarrollado para mi Trabajo de Fin de Máster "".
 
 ## Descripción :clipboard:
-TMT es una herramienta para la simulación de ciberataques y su visualización en bases de datos orientadas a grafos. Más concretamente, los ataques se generan mediante cadenas de Markov y están basados en técnicas de la matriz MITRE ATT&CK. Estos ataques se simulan sobre escenarios de red que la herramienta permite desplegar en la base de datos Neo4j.
+ARGOS es una herramienta para la simulación de ciberataques y su visualización en bases de datos orientadas a grafos. Más concretamente, los ataques se generan mediante cadenas de Markov y están basados en técnicas de la matriz MITRE ATT&CK. Estos ataques se simulan sobre escenarios de red que la herramienta permite desplegar en la base de datos Neo4j.
 
 ## Uso :gear:
 
 ```
-python3 tmt.py [comando] [parámetros]
+python3 argos.py [comando] [parámetros]
 
 COMANDOS:
         prepare:        Cargar escenario de red enviado como parámetro en Neo4j.
