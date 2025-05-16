@@ -3,13 +3,20 @@
 
 # ARGOS
 
+                                           _    ____   ____  ___  ____
+                                          / \  |  _ \ / ___|/ _ \/ ___|
+                                         / _ \ | |_) | |  _| | | \___ \
+                                        / ___ \|  _ <| |_| | |_| |___) |
+                                       /_/   \_\_| \_\\____|\___/|____/
 
 
+Este repositorio contiene la herramienta desarrollada para mi Trabajo de Fin de Máster "Desarrollo de una herramienta para la simulación de rutas de ataque en entornos de conciencia cibersituacional basada en procesos estocásticos".
 
-Este repositorio contiene el código desarrollado para mi Trabajo de Fin de Máster "".
 
 ## Descripción :clipboard:
-ARGOS es una herramienta para la simulación de ciberataques y su visualización en bases de datos orientadas a grafos. Más concretamente, los ataques se generan mediante cadenas de Markov y están basados en técnicas de la matriz MITRE ATT&CK. Estos ataques se simulan sobre escenarios de red que la herramienta permite desplegar en la base de datos Neo4j.
+Attack Route Graph Observation System (ARGOS) permite simular rutas de ataque en entornos de conciencia cibersituacional, apoyando la detección de vulnerabilidades y la toma de decisiones en ciberseguridad. Esta herramienta de línea de comandos permite la generación de secuencias de ataque basadas en técnicas de la matriz MITRE ATT&CK mediante Cadenas de Markov y la visualización de su impacto sobre escenarios de red previamente definidos y completamente configurables sobre una base de datos orientada a grafos.
+
+![system-architecture-detailed](https://github.com/user-attachments/assets/710bcfae-f648-4ab4-a7af-af877c413d3c)
 
 ## Uso :gear:
 
@@ -17,8 +24,9 @@ ARGOS es una herramienta para la simulación de ciberataques y su visualización
 python3 argos.py [comando] [parámetros]
 
 COMANDOS:
-        prepare:        Cargar escenario de red enviado como parámetro en Neo4j.
+        prepare:        Cargar escenario de red enviado como argumento en Neo4j.
         attack:         Generar ataque y dirigirlo al escenario creado.
+        trace:          Generar ataque partiendo de una técnica inicial.
         history:        Mostrar historial de ataques.
         clean:          Limpiar base de datos.
 
@@ -26,7 +34,47 @@ PARÁMETROS:
         --help|-h:      Mostrar ayuda y salir.
 ```
 
-### Detalle comandos 🚀
+## Dependencias :bookmark:
+- **Python 3.7+**
+- **Neo4j 4.0+**
+- Dependencias de Python:
+  - `neo4j`
+  - `rich`
+
+## Estructura del proyecto :open_file_folder:
+
+Además del propio programa escrito en Python, este repositorio contiene una serie de ficheros y directorios de los que se hace uso para proporcionar las funcionalidades descritas. Estos son los siguientes:
+
+- `scenarios`: este directorio contiene ficheros de texto que representan los escenarios de red sobre los que realizar las simulaciones de ataque. Los escenarios están definidos usando Cypher Query Language, el lenguaje de consulta para Neo4j (es similar a SQL pero diseñado específicamente para grafos) y se pueden cargar en la base de datos mediante el comando *prepare*.
+  
+- `transitions.csv`: proporciona información acerca de las transiciones entre técnicas MITRE ATT&CK. Se utiliza en la implementación de una cadena de Markov para generar una secuencia aleatoria de técnicas, formando así un ataque.
+  
+- `tecnicas_completo.json`: contiene información detallada sobre las técnicas MITRE ATT&CK.
+
+- `ttp_cwe_cve.json`: permite establecer una relación entre las técnicas de ataque y los CWEs/CVEs que explotan.
+  
+- `ttp_mitigations.json`: contiene información sobre las mitigaciones asociadas a cada técnica.
+
+## Preparación del entorno en Neo4j :wrench:
+Una vez instaladas las dependencias y clonado el repositorio, es necesaria la configuración de Neo4j, siguiendo los pasos que se indican a continuación:
+
+### 1. Instalación y Configuración Inicial:
+
+- Descargar e instalar Neo4j Desktop desde el [sitio oficial](https://neo4j.com/download/).
+- Abrir Neo4j Desktop. La primera vez que se ejecute, es posible que se requiera iniciar sesión o crear una cuenta gratuita.
+
+### 2. Creación de un Proyecto:
+
+Dentro de Neo4j Desktop, es posible organizar las bases de datos en proyectos. Hacer clic en "New Project" para crear un nuevo proyecto donde se alojará la base de datos.
+
+### 3. Crear una Base de Datos Neo4j:
+
+- Dentro del proyecto, hacer clic en "Add Database" y luego seleccionar "Local DBMS" para crear una nueva base de datos local.
+- Asignar un nombre a la base de datos y elige una contraseña para el usuario neo4j. Estas credenciales han de incluirse dentro de la función `start_neo4j()` dentro del archivo `tmt.py`
+- Hacer clic en "Create" y luego en "Start" para iniciar la base de datos.
+- Una vez iniciada, el botón "Open Browser" abrirá la consola de Neo4j en el navegador, donde se podrán ejecutar consultas Cypher para visualizar los ataques.
+
+## Ejemplo 🚀
 
 #### Prepare
 `python3 tmt.py prepare <FILE>`
@@ -48,45 +96,6 @@ Muestra un historial de los ataques realizados en formato de tabla.
 
 Limpia todos los nodos y relaciones de la base de datos de Neo4j.
 
-## Dependencias :bookmark:
-- **Python 3.7+**
-- **Neo4j 4.0+**
-- Dependencias de Python:
-  - `neo4j`
-  - `rich`
-
-## Estructura del proyecto :open_file_folder:
-
-Además del propio programa, este repositorio contiene una serie de ficheros y directorios de los que este hace uso para proporcionar las funcionalidades descritas. Estos son:
-
-- `scenarios`: este directorio contiene ficheros de texto que reprsentan escearios de red sobre los que realizar las simulaciones de ataque. Los escenarios están definidos usando Cypher Query Language, el lenguaje de consulta para Neo4j (es similar a SQL pero diseñado específicamente para grafos) y se pueden cargar en la base de datos mediante el comando *prepare*.
-  
-- `transitions.csv`: proporciona información acerca de las transiciones entre técnicas MITRE ATT&CK. Se utiliza en la implementación de una cadena de Markov para generar una secuencia aleatoria de técnicas, formando así un ataque.
-  
-- `tecnicas_completo.json`: contiene información detallada sobre las técnicas MITRE ATT&CK.
-
-- `ttp_cwe_cve.json`: permite establecer una relaciṕon entre las técnicas de ataque y los CWEs/CVEs que explotan.
-  
-- `ttp_mitigations.json`: contiene información con las mitigaciones asociadas a cada técnica.
-
-## Preparación del entorno en Neo4j :wrench:
-Una vez instaladas las dependencias y clonado el repositorio, es necesaria la configuración de Neo4j, siguiendo los pasos que se indican a continuación:
-
-### 1. Instalación y Configuración Inicial:
-
-- Descargar e instalar Neo4j Desktop desde el [sitio oficial](https://neo4j.com/download/).
-- Abrir Neo4j Desktop. La primera vez que se ejecute, es posible que se requiera iniciar sesión o crear una cuenta gratuita.
-
-### 2. Creación de un Proyecto:
-
-Dentro de Neo4j Desktop, es posible organizar las bases de datos en proyectos. Hacer clic en "New Project" para crear un nuevo proyecto donde se alojará la base de datos.
-
-### 3. Crear una Base de Datos Neo4j:
-
-- Dentro del proyecto, hacer clic en "Add Database" y luego seleccionar "Local DBMS" para crear una nueva base de datos local.
-- Asignar un nombre a la base de datos y elige una contraseña para el usuario neo4j. Estas credenciales han de incluirse dentro de la función `start_neo4j()` dentro del archivo `tmt.py`
-- Hacer clic en "Create" y luego en "Start" para iniciar la base de datos.
-- Una vez iniciada, el botón "Open Browser" abrirá la consola de Neo4j en el navegador, donde se podrán ejecutar consultas Cypher para visualizar los ataques.
 
 ## Autor :art:
 [Samuel García Sánchez](https://github.com/samugs13)
