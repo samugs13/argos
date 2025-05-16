@@ -1,0 +1,49 @@
+ID Ataque,Escenario,Activo Más Afectado,Técnica más exitosa,Fecha de ejecución
+Ataque-3730,industrial,PLC,"T1021, T1078",2025-04-10 20:12:20
+Ataque-7863,oficina,PC1,T1052,2025-04-10 20:12:30
+Ataque-3218,smarthome,"Hub, Thermostat",T1021,2025-04-10 20:15:41
+Ataque-6304,oficina,"PC1, WebServer, MailServer",T1021,2025-04-10 20:16:04
+Ataque-5094,oficina,PC1,T1080,2025-04-10 20:16:06
+Ataque-8807,oficina,"PC1, PC2, WebServer, MailServer","T1119, T1021",2025-04-10 20:16:08
+Ataque-9939,oficina,"WebServer, MailServer",T1021,2025-04-10 20:16:14
+Ataque-4159,industrial,PLC,T1078,2025-04-10 20:16:32
+Ataque-1567,industrial,PLC,"T1005, T1021",2025-04-10 20:16:34
+Ataque-4828,industrial,PLC,T1552,2025-04-10 20:16:36
+Ataque-9075,oficina,"WebServer, MailServer",T1021,2025-04-23 21:57:18
+Ataque-8834,oficina,"WebServer, MailServer",T1021,2025-04-23 21:57:41
+Ataque-7216,oficina,"PC1, Apache",T1005,2025-04-23 21:57:50
+Ataque-6478,oficina,"WebServer, MailServer",T1021,2025-04-23 21:58:02
+Ataque-8026,smarthome,Smartphone,"T1068, T1569",2025-04-23 22:03:50
+Ataque-8904,oficina,"PC1, WebServer, MailServer",T1056,2025-04-23 22:04:09
+Ataque-4978,oficina,"PC1, PC2, WebServer, MailServer, Apache",T1078,2025-04-23 22:04:34
+Ataque-4294,oficina,"PC1, PC2, WebServer, MailServer, Firewall, Apache",T1078,2025-04-23 22:04:43
+Ataque-4592,oficina,PC1,T1078,2025-04-23 22:04:51
+Ataque-5011,industrial,PLC,"T1056, T1040, T1021",2025-04-23 22:12:41
+Ataque-8923,industrial,PLC,"T1021, T1078",2025-04-23 22:12:55
+Ataque-3488,industrial,PLC,"T1543, T1021, T1078",2025-04-23 22:13:05
+Ataque-5429,industrial,PLC,"T1552, T1550, T1078",2025-04-23 22:13:12
+Ataque-8645,oficina,PC1,T1078,2025-04-23 22:16:10
+Ataque-1809,oficina,"PC1, PC2",T1119,2025-04-23 22:24:00
+Ataque-7906,oficina,"PC1, Apache",T1005,2025-04-23 22:24:09
+Ataque-7637,oficina,"PC1, PC2, WebServer, MailServer, Apache","T1505, T1082, T1016, T1033, T1078",2025-04-23 22:27:28
+Ataque-4021,oficina,"Firewall, WebServer, MailServer",T1021,2025-04-23 22:34:41
+Ataque-2948,oficina,PC1,"T1005, T1021",2025-04-23 22:41:10
+Ataque-4834,oficina,"Firewall, WebServer, MailServer",T1021,2025-04-23 22:41:21
+Ataque-1265,smarthome,"Router, Printer, SmartTV, CCTV, Hub, Smartphone",T1078,2025-04-23 22:51:39
+Ataque-7930,smarthome,"Router, Printer, SmartTV, CCTV, Hub, Smartphone",T1078,2025-04-23 22:51:42
+Ataque-7285,smarthome,"Router, Printer, SmartTV, CCTV, Hub, Smartphone",T1078,2025-04-23 22:51:45
+Ataque-4372,smarthome,"Router, Printer, CCTV, Smartphone",T1056,2025-04-23 22:51:51
+Ataque-5631,smarthome,Smartphone,T1021,2025-04-23 22:51:55
+Ataque-7687,smarthome,Smartphone,T1078,2025-04-23 22:55:42
+Ataque-3948,oficina,PC1,T1614,2025-04-28 14:15:26
+Ataque-3382,smarthome,"SmartTV, Hub",T1078,2025-04-28 14:17:21
+Ataque-1915,smarthome,Smartphone,T1056,2025-04-28 14:17:44
+Ataque-4399,smarthome,"Hub, Thermostat, Smartphone",T1021,2025-04-28 15:42:50
+Ataque-5236,smarthome,Smartphone,T1078,2025-04-28 15:42:59
+Ataque-6265,smarthome,Smartphone,T1078,2025-04-28 15:56:04
+Ataque-6047,smarthome,Hub,T1078,2025-04-28 15:56:25
+Ataque-4598,smarthome,"Hub, Smartphone",T1078,2025-04-28 16:00:12
+Ataque-7788,smarthome,Smartphone,"T1053, T1102",2025-04-28 16:00:55
+Ataque-9050,smarthome,Smartphone,T1021,2025-04-28 16:07:25
+Ataque-9145,smarthome,Smartphone,"T1559, T1120, T1053, T1102",2025-04-28 16:07:52
+Ataque-1687,smarthome,Smartphone,T1078,2025-04-28 16:08:41

@@ -107,7 +107,7 @@ def simulate_chain(start_state, num_steps, transitions, max_recent=5):
     return chain
 
 # Generar secuencia de estados mediante cadena de Markov
-def generate_markov_sequence():
+def generate_markov_sequence(command, techniques):
     
     # Cargar las transiciones desde el archivo CSV generado por el script anterior
     transitions = load_transitions('transitions.csv')
@@ -116,17 +116,31 @@ def generate_markov_sequence():
     verify_probabilities(transitions, is_percentage=True)  # Cambia a False si trabajas con decimales
 
     # Seleccionar un estado inicial aleatorio de las claves disponibles en transitions
-    start_state = random.choice(list(transitions.keys()))
+    if command == "attack":
+        start_state = random.choice(list(transitions.keys()))
 
-    if start_state not in transitions:
-        print("El estado inicial no es válido. Por favor, elija un estado disponible.")
-        exit(0)
-    else:
-        # Simulación de la cadena de Markov
-        num_steps = 80  # Número de pasos máximo a simular
-        chain = simulate_chain(start_state, num_steps, transitions)
-        print("[yellow][+][reset] Secuencia simulada de estados:", str(chain))
-        print("\n")
+    elif command == "trace":
+
+        available_states = sorted(transitions.keys())
+        num_columns = 3  # Número de columnas
+        available_states = list(available_states)
+
+        print("\n[blue][+][reset] Técnicas disponibles:\n")
+        for i in range(0, len(available_states), num_columns):
+            row = available_states[i:i+num_columns]
+            print(' | '.join(f"{state} - {techniques.get(state, {}).get('name', 'Desconocido'):<50}" for state in row))
+
+        start_state = input("\nIngrese el estado inicial: ") 
+
+        if start_state not in transitions:
+            print("\n[red][+][reset] El estado inicial no es válido. Por favor, elija una técnica válida.\n")
+            exit(0)
+    
+    # Simulación de la cadena de Markov
+    num_steps = 30  # Número de pasos máximo a simular
+    chain = simulate_chain(start_state, num_steps, transitions)
+    print("[yellow][+][reset] Secuencia simulada de estados:", str(chain))
+    print("\n")
     return chain
 
 def create_scenario_graph(driver, scenario_file):
@@ -341,18 +355,15 @@ def link_attack_to_scenario(driver, chain, techniques, cves, cwes):
                 # Realizar el MATCH en Neo4j con los filtros de plataforma, permisos y defensas
                 result = session.run("""
                 MATCH (a:Activo)
-                WHERE a.platform IN $platforms 
-                AND (
-                    $permissions IS NULL OR ANY(permiso IN a.permissions WHERE permiso IN $permissions)
-                    AND $requirements IS NULL OR ANY(capacidad IN a.capabilities WHERE capacidad IN $requirements)
-                )
-                OR a.cve IN $CVEs
+                WHERE (a.platform IN $platforms AND 
+                    (ANY(permiso IN a.permissions WHERE permiso IN $permissions)
+                    OR ($requirements IS NULL OR ANY(capacidad IN a.capabilities WHERE capacidad IN $requirements))))
+                    OR a.cve IN $CVEs
                 MATCH (t:Técnica {id: $estado})
                 MATCH (n:Activo) 
                 MERGE (t)-[:EXPLOTACIÓN]->(a)
                 RETURN a.name, t.id, t.name, count(n) AS total_activos
-                """, platforms=platforms, requirements=requirements, permissions=permissions,
-                     CVEs=state_cves, estado=state)
+                """, platforms=platforms, requirements=requirements, permissions=permissions, CVEs=state_cves, estado=state)
                 
                 # Iterar sobre los registros en el resultado
                 for record in result:
@@ -372,11 +383,11 @@ def link_attack_to_scenario(driver, chain, techniques, cves, cwes):
         exit(1)
 
 def create_dashboard(affected_assets, affecting_techniques_ids, affecting_techniques_names, total_assets, chain):
-    
+     
     if len(affected_assets) != len(affecting_techniques_ids):
         print("\n[red][+][reset] Error: Las listas deben tener la misma longitud.")
         return
-
+    
     try:  
         secure_assets = int(total_assets) - int(len(set(affected_assets)))
         affected_assets_count = len(set(affected_assets))
@@ -592,7 +603,8 @@ def help():
     print("[blue]COMMANDS:")
     print("[yellow]\tgenerate:" + "[reset]\tGenerar y mostrar secuencia de ataque.")
     print("[yellow]\tprepare:" + "[reset]\tCargar escenario de red enviado como parámetro en Neo4j.")
-    print("[yellow]\tattack:" + "[reset]\t\tGenerar ataque y dirigirlo al escenario creado.")
+    print("[yellow]\tattack:" + "[reset]\t\tGenerar cadena de ataque y dirigirla al escenario creado.")
+    print("[yellow]\ttrace:" + "[reset]\t\tGenerar cadena de ataque a partir de una técnica inicial seleccionada manualmente por el usuario.")
     print("[yellow]\thistory:" + "[reset]\tMostrar historial de ataques.")
     print("[yellow]\tclean:" + "[reset]\t\tLimpiar base de datos.\n")
  
@@ -600,7 +612,7 @@ def main():
     
     # Verificar argumentos
     if len(sys.argv) <= 1:
-        print("[reset]You didn't specify an argument.")
+        print("[reset] Seleccione un comando.")
         help()
         exit(1)
 
@@ -608,15 +620,10 @@ def main():
         help()
         exit(0)
 
-    if str(sys.argv[1]) == "generate":
-        generate_markov_sequence()
-        load_techniques_json('tecnicas_completo.json')
-        exit(0)
-    
     if str(sys.argv[1]) == "prepare":
         
         if len(sys.argv) < 3:
-            print("[reset]Please specify the scenario file.")
+            print("[reset]Es necesario especificar un escenario de red.")
             exit(1)
         
         scenario_file = sys.argv[2]
@@ -625,11 +632,11 @@ def main():
         close_neo4j(driver)
         exit(0)
 
-    elif str(sys.argv[1]) == "attack":
-        chain = generate_markov_sequence()    
+    elif str(sys.argv[1]) == "attack" or str(sys.argv[1]) == "trace":
         techniques = load_techniques_json('tecnicas_completo.json')
         cves = load_cves_json('ttp_cwe_cve.json')
         cwes = load_cwes_json('ttp_cwe_cve.json')
+        chain = generate_markov_sequence(sys.argv[1], techniques)    
         driver = start_neo4j()
         create_attack_graph(driver, chain, techniques, cves, cwes)
         link_attack_to_scenario(driver, chain, techniques, cves, cwes)
