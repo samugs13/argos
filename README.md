@@ -3,11 +3,11 @@
 
 # ARGOS
 
-                                           _    ____   ____  ___  ____
-                                          / \  |  _ \ / ___|/ _ \/ ___|
-                                         / _ \ | |_) | |  _| | | \___ \
-                                        / ___ \|  _ <| |_| | |_| |___) |
-                                       /_/   \_\_| \_\\____|\___/|____/
+                                      _    ____   ____  ___  ____
+                                     / \  |  _ \ / ___|/ _ \/ ___|
+                                    / _ \ | |_) | |  _| | | \___ \
+                                   / ___ \|  _ <| |_| | |_| |___) |
+                                  /_/   \_\_| \_\\____|\___/|____/
 
 
 Este repositorio contiene la herramienta desarrollada para mi Trabajo de Fin de Máster "Desarrollo de una herramienta para la simulación de rutas de ataque en entornos de conciencia cibersituacional basada en procesos estocásticos".
@@ -16,7 +16,9 @@ Este repositorio contiene la herramienta desarrollada para mi Trabajo de Fin de 
 ## Descripción :clipboard:
 Attack Route Graph Observation System (ARGOS) permite simular rutas de ataque en entornos de conciencia cibersituacional, apoyando la detección de vulnerabilidades y la toma de decisiones en ciberseguridad. Esta herramienta de línea de comandos permite la generación de secuencias de ataque basadas en técnicas de la matriz MITRE ATT&CK mediante Cadenas de Markov y la visualización de su impacto sobre escenarios de red previamente definidos y completamente configurables sobre una base de datos orientada a grafos.
 
-![system-architecture-detailed](https://github.com/user-attachments/assets/710bcfae-f648-4ab4-a7af-af877c413d3c)
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/710bcfae-f648-4ab4-a7af-af877c413d3c"/>
+</p>
 
 ## Uso :gear:
 
