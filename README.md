@@ -28,7 +28,7 @@ python3 argos.py [comando] [parámetros]
 COMANDOS:
         prepare:        Cargar escenario de red enviado como argumento en Neo4j.
         attack:         Generar ataque y dirigirlo al escenario creado.
-        trace:          Generar ataque partiendo de una técnica inicial.
+        trace:          Generar ataque partiendo de una técnica inicial seleccionada por el usuario.
         history:        Mostrar historial de ataques.
         clean:          Limpiar base de datos.
 
