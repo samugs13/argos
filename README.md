@@ -63,41 +63,73 @@ Una vez instaladas las dependencias y clonado el repositorio, es necesaria la co
 ### 1. Instalación y Configuración Inicial:
 
 - Descargar e instalar Neo4j Desktop desde el [sitio oficial](https://neo4j.com/download/).
-- Abrir Neo4j Desktop. La primera vez que se ejecute, es posible que se requiera iniciar sesión o crear una cuenta gratuita.
+- Abrir Neo4j Desktop. La primera vez que se ejecute, es posible que se requiera iniciar sesión o crear una cuenta gratuita en su defecto.
 
 ### 2. Creación de un Proyecto:
 
-Dentro de Neo4j Desktop, es posible organizar las bases de datos en proyectos. Hacer clic en "New Project" para crear un nuevo proyecto donde se alojará la base de datos.
+Dentro de Neo4j Desktop, es posible organizar las bases de datos en proyectos. En el panel `Projects`, accesible clicando en el icono de la carpeta de la parte superior izquierda, hacer clic en `New > Create Project` para crear un nuevo proyecto donde se alojará la base de datos.
 
-### 3. Crear una Base de Datos Neo4j:
+### 3. Crear y configurar una Base de Datos Neo4j:
+Para crear una base de datos y asociarla con ARGOS se han de seguir los siguientes pasos:
 
-- Dentro del proyecto, hacer clic en "Add Database" y luego seleccionar "Local DBMS" para crear una nueva base de datos local.
-- Asignar un nombre a la base de datos y elige una contraseña para el usuario neo4j. Estas credenciales han de incluirse dentro de la función `start_neo4j()` dentro del archivo `tmt.py`
-- Hacer clic en "Create" y luego en "Start" para iniciar la base de datos.
-- Una vez iniciada, el botón "Open Browser" abrirá la consola de Neo4j en el navegador, donde se podrán ejecutar consultas Cypher para visualizar los ataques.
+1. Dentro del proyecto, hacer clic en `Add` (situado en la parte superior derecha) y luego seleccionar `Local DBMS` para crear una nueva base de datos local.
+2. Asignar un nombre a la base de datos y elige una contraseña para el usuario neo4j.
+3. Hacer clic en `Create` y luego en `Start` para iniciar la base de datos.
+4. Una vez iniciada, el botón `Open` abrirá la consola de Neo4j en el navegador, donde se podrán ejecutar consultas Cypher para visualizar los ataques.
+5. En la parte inferior de la consola aparecerá la información asociada a la conexión (usuario y dirección URL). Es necesario introducir esta información (junto a la contraseña establecida dos pasos atrás) dentro de la función `start neo4j()` en el fichero `argos.py`. Esto permitirá que ARGOS interaccione con la base de datos.
+6. Finalmente, se recomienda configurar en la sección `Favorites` de la consola la query `MATCH (n) RETURN n`, que no hace más que devolver todos los nodos y aristas presentes en la base de datos. Este ajuste permitirá ejecutar esta instrucción rápidamente, ya que dicha ejecución será necesaria cada vez que se realice una operación sobre la base de datos.
 
-## Ejemplo 🚀
+## Ejemplo de uso 🚀
+Teniendo en cuenta el siguiente diagrama de flujo de la herramienta, en esta sección se va presenta un caso de uso a modo de ejemplo.
 
-#### Prepare
-`python3 tmt.py prepare <FILE>`
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/2a79368f-32d3-4202-87a3-fa1beb16703a"/>
+</p>
 
-Carga un escenario de red en la base de datos desde un archivo que se pasa como parámetro.
+#### 1. Cargar el escenario de red en la base de datos
+Una vez configurada la base de datos, es posible cargar en la base de datos los escenarios de red disponibles en el directorio `scenarios`mediante el comando `prepare`. 
+Por ejemplo, para cargar el escenario correspondiente a una pequeña oficina corporativa habría que desplazarse en la terminal hasta el mismo directorio donde se encuentre la herrsamienta y ejecutar lo siguiente:
 
-#### Attack
-`python3 tmt.py attack`
+`python3 argos.py prepare scenarios/industrial.cypher`
 
-Genera una secuencia de ataque y la inserta en la base de datos, relacionando las técnicas de ataque con los activos afectados del escenario previamente cargado. Una vez realizado el ataque se muestra un dashboard con estadísticas acerca de su ejecución.
+Como resultado, al ejecutar la query `MATCH (n) RETURN n` en la consola de Neo4j, se visualizaría dicho escenario como un grafo:
 
-#### History
-`python3 tmt.py history`
+![escenario-oficina](https://github.com/user-attachments/assets/11ce2310-c856-4adc-bc1c-fca7fc3c24a1)
 
-Muestra un historial de los ataques realizados en formato de tabla.
+#### 2. Insertar secuencia de ataque sobre el escenario
+Con el escenario cargado en la base de datos, el siguiente paso es la creación de una secuencia de ataque que se insertará también en la base de datos, relacionando las técnicas de ataque con los activos afectados del escenario previamente cargado. 
 
-#### Clean
-`python3 tmt.py clean`
+Esta secuencia se puede generar de manera completamente aleatoria mediante el comando `attack` o eligiendo una técnica inicial de entre las disponibles mediante el comando `trace` (útil si ya se ha detectado una técnica y se desean estudiar los posibles pasos a seguir por el atacante).
 
-Limpia todos los nodos y relaciones de la base de datos de Neo4j.
+Por ejemplo, para el comando `attack` el comando sería el siguiente:
 
+`python3 argos.py attack`
+
+Tras el ataque (en el caso de que haya activos afectados) se mostrará en la terminal un dashboard con estadísticas acerca de su ejecución.
+
+![dashboard-oficina](https://github.com/user-attachments/assets/b78b1bca-482f-4645-a9db-5b92dd1fb009)
+
+Si se vuelve a ejecutar la query en la consola de Neo4j, se podrá visualizar las relaciones establecidas con el escenario de red.
+
+![ataque-oficina](https://github.com/user-attachments/assets/3803878f-f49a-450e-bb5b-3985b7e199d3)
+
+#### 3. Mostrar historial de ataques
+El comando `history` permite llevar una trazabilidad de los ataques que se han realizado en cada escenario de red:  
+
+`python3 argos.py history`
+
+La información se muestra en formato de tabla a través de la terminal:
+
+![history](https://github.com/user-attachments/assets/05b07d4e-b4e0-45e3-9db9-7aa4f44c7151)
+
+
+#### 4. Limpiar la base de datos
+Antes de realizar una nueva ejecución, el comando `clean` limpia todos los nodos y relaciones presentes en la base de datos de Neo4j. 
+
+`python3 argos.py clean`
+
+## Información Adicional :information_source:
+Para mayor detalle sobre el funcionamiento y capacidades de la herramienta, consultar la memoria completa, disponible en el archivo `TFM-SGS.pdf`
 
 ## Autor :art:
 [Samuel García Sánchez](https://github.com/samugs13)
