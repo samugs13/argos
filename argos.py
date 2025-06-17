@@ -110,7 +110,7 @@ def simulate_chain(start_state, num_steps, transitions, max_recent=5):
 def generate_markov_sequence(command, techniques):
     
     # Cargar las transiciones desde el archivo CSV generado por el script anterior
-    transitions = load_transitions('transitions.csv')
+    transitions = load_transitions('./data/transitions.csv')
 
     # Verificar que las probabilidades sumen correctamente
     verify_probabilities(transitions, is_percentage=True)  # Cambia a False si trabajas con decimales
@@ -428,7 +428,7 @@ def create_dashboard(affected_assets, affecting_techniques_ids, affecting_techni
     mat_str = ", ".join(most_affecting_techniques)
     
     # Obtener mitigaciones asociadas a las técnicas más exitosas
-    mitigations = load_mitigations_json('ttp_mitigations.json')
+    mitigations = load_mitigations_json('./data/ttp_mitigations.json')
     unique_mitigations = list({mitigations[tech] for tech in most_affecting_techniques if tech in mitigations})
     mit_str = ", ".join(unique_mitigations)
 
@@ -563,12 +563,12 @@ def clean_database(driver):
         exit(1)
 
 def guardar_escenario(escenario):
-    with open('current_scenario.txt', "w") as file:
+    with open('./scenarios/current_scenario.txt', "w") as file:
         file.write(str(escenario))
 
 def cargar_escenario():
     try:
-        with open('current_scenario.txt', "r") as file:
+        with open('./scenarios/current_scenario.txt', "r") as file:
             return file.read()
     except FileNotFoundError:
         return 0
@@ -633,9 +633,9 @@ def main():
         exit(0)
 
     elif str(sys.argv[1]) == "attack" or str(sys.argv[1]) == "trace":
-        techniques = load_techniques_json('tecnicas_completo.json')
-        cves = load_cves_json('ttp_cwe_cve.json')
-        cwes = load_cwes_json('ttp_cwe_cve.json')
+        techniques = load_techniques_json('./data/tecnicas_completo.json')
+        cves = load_cves_json('./data/ttp_cwe_cve.json')
+        cwes = load_cwes_json('./data/ttp_cwe_cve.json')
         chain = generate_markov_sequence(sys.argv[1], techniques)    
         driver = start_neo4j()
         create_attack_graph(driver, chain, techniques, cves, cwes)
